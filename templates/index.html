@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CCHH — Generador de Informes de Liderazgo</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+  :root{--cchh:#2E5496;--cchh-light:#4472C4;--cchh-bg:#EBF0FA;--accent:#FF6600}
+  body{background:#f4f6fb;font-family:'Segoe UI',sans-serif;font-size:.93rem}
+  .navbar{background:var(--cchh)!important}
+  .navbar-brand{font-weight:700;font-size:1.15rem;letter-spacing:.03em}
+  .nav-tabs .nav-link{color:#555;font-weight:500}
+  .nav-tabs .nav-link.active{color:var(--cchh);border-bottom:3px solid var(--cchh);font-weight:700}
+
+  /* last-run bar */
+  #last-run-bar{background:var(--cchh-bg);border-left:4px solid var(--cchh);border-radius:6px;font-size:.85rem}
+
+  /* model cards */
+  .model-card{cursor:pointer;border:2px solid #dee2e6;border-radius:10px;transition:.15s;background:#fff}
+  .model-card:hover{border-color:var(--cchh-light);background:var(--cchh-bg)}
+  .model-card.selected{border-color:var(--cchh);background:var(--cchh-bg);box-shadow:0 0 0 3px rgba(46,84,150,.18)}
+  .model-card .badge-rating{font-size:.75rem;padding:.3em .6em}
+
+  /* planilla rows */
+  .planilla-row{cursor:pointer;border:2px solid #dee2e6;border-radius:8px;transition:.15s;background:#fff}
+  .planilla-row:hover{border-color:var(--cchh-light)}
+  .planilla-row.selected{border-color:var(--cchh);background:var(--cchh-bg)}
+
+  /* semaphore */
+  .sheet-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}
+  .dot-ok{background:#28a745}.dot-warn{background:#ffc107}.dot-err{background:#dc3545}
+
+  /* progress */
+  #progress-wrap{display:none}
+  .progress{height:28px;border-radius:8px}
+  .progress-bar{transition:width .4s ease,background-color .3s}
+
+  /* star rating */
+  .star-btn{background:none;border:none;font-size:2rem;color:#ccc;cursor:pointer;transition:.1s;padding:0 4px}
+  .star-btn.active,.star-btn:hover~.star-btn{color:#ccc}
+  .star-btn.active,.star-active{color:#ffc107}
+  #stars-wrap:hover .star-btn{color:#ffc107}
+  #stars-wrap .star-btn:hover~.star-btn{color:#ccc}
+  .rating-label{font-size:.82rem;color:#666;min-height:1.2em;text-align:center}
+
+  /* history table */
+  .table-hover tbody tr:hover{background:#f0f5ff}
+  .badge-rating-sm{font-size:.78rem;padding:.25em .5em}
+
+  /* KPI cards */
+  .kpi-card{border-radius:12px;border:none;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .kpi-val{font-size:2.2rem;font-weight:700;color:var(--cchh)}
+  .kpi-label{font-size:.8rem;color:#777;text-transform:uppercase;letter-spacing:.05em}
+
+  /* alert banner */
+  #alert-banner{display:none;border-left:5px solid #dc3545}
+
+  /* charts */
+  .chart-card{border-radius:12px;border:none;box-shadow:0 2px 8px rgba(0,0,0,.07);background:#fff}
+
+  /* misc */
+  .btn-cchh{background:var(--cchh);color:#fff;border:none;font-weight:600}
+  .btn-cchh:hover{background:var(--cchh-light);color:#fff}
+  .section-title{color:var(--cchh);font-weight:700;border-bottom:2px solid var(--cchh-bg);padding-bottom:.3rem;margin-bottom:1rem}
+  #rating-section{display:none}
+</style>
+</head>
+<body>
+
+<!-- ══ NAVBAR ══ -->
+<nav class="navbar navbar-dark px-3 py-2">
+  <span class="navbar-brand">
+    <i class="fa-solid fa-chart-radar me-2" style="color:#aac4ff"></i>
+    CCHH · Generador de Informes de Liderazgo
+  </span>
+  <span class="text-white-50 small" id="clock"></span>
+</nav>
+
+<!-- ══ TABS ══ -->
+<div class="container-fluid px-4 pt-3">
+<ul class="nav nav-tabs mb-3" id="mainTabs">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-ejecutar"><i class="fa fa-play-circle me-1"></i>Ejecutar</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-historial" id="tab-historial-link"><i class="fa fa-history me-1"></i>Historial</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-metricas" id="tab-metricas-link"><i class="fa fa-chart-bar me-1"></i>Métricas</a></li>
+</ul>
+
+<div class="tab-content">
+
+<!-- ══════════════════════════════════════════════
+     TAB 1 — EJECUTAR
+══════════════════════════════════════════════ -->
+<div class="tab-pane fade show active" id="tab-ejecutar">
+
+  <!-- Última ejecución -->
+  <div id="last-run-bar" class="p-3 mb-3">
+    <span class="text-muted">Última ejecución:</span> <span id="lr-text">Sin datos aún</span>
+  </div>
+
+  <!-- Formulario -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+
+      <!-- Evaluado -->
+      <div class="mb-3">
+        <label class="form-label fw-bold"><i class="fa fa-user me-1 text-secondary"></i>Nombre del Evaluado/a</label>
+        <input type="text" id="inp-evaluado" class="form-control" placeholder="Ej: Juan Pérez" maxlength="60">
+      </div>
+
+      <!-- Modelos -->
+      <div class="mb-3">
+        <label class="form-label fw-bold d-flex align-items-center gap-2">
+          <span><i class="fa fa-file-word me-1 text-secondary"></i>Modelo de Informe</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="loadFiles()" title="Actualizar lista de archivos">
+            <i class="fa fa-sync-alt"></i> Actualizar
+          </button>
+        </label>
+        <div id="modelos-grid" class="row g-2">
+          <div class="col-12 text-muted small">Cargando modelos...</div>
+        </div>
+      </div>
+
+      <!-- Planillas -->
+      <div class="mb-3">
+        <label class="form-label fw-bold"><i class="fa fa-table me-1 text-secondary"></i>Planilla de Respuestas</label>
+        <div id="planillas-list"></div>
+      </div>
+
+      <!-- Validación -->
+      <div id="validation-panel" class="mb-3" style="display:none">
+        <div class="fw-semibold mb-1 small text-secondary">Validación de hojas:</div>
+        <div id="validation-detail" class="d-flex flex-wrap gap-2"></div>
+      </div>
+
+      <!-- Tiempo estimado -->
+      <div id="est-time-row" class="mb-3 text-muted small" style="display:none">
+        <i class="fa fa-clock me-1"></i><span id="est-time-text"></span>
+      </div>
+
+      <!-- Botón ejecutar -->
+      <button id="btn-run" class="btn btn-cchh btn-lg w-100" disabled>
+        <i class="fa fa-bolt me-2"></i>Generar Informe
+      </button>
+    </div>
+  </div>
+
+  <!-- Progreso -->
+  <div id="progress-wrap" class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span id="progress-msg" class="fw-semibold text-secondary">Iniciando...</span>
+        <span id="progress-timer" class="small text-muted"></span>
+      </div>
+      <div class="progress mb-1">
+        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+             role="progressbar" style="width:0%">0%</div>
+      </div>
+      <div class="d-flex justify-content-between small text-muted mt-1">
+        <span id="progress-step">Esperando...</span>
+        <span id="progress-eta"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calificación -->
+  <div id="rating-section" class="card shadow-sm mb-3 border-warning">
+    <div class="card-header bg-warning bg-opacity-10 fw-bold">
+      <i class="fa fa-star me-1 text-warning"></i>Calificar este informe
+    </div>
+    <div class="card-body">
+      <p class="mb-2 text-secondary small">¿Cómo evaluás la calidad del informe generado?</p>
+      <div id="stars-wrap" class="d-flex justify-content-center mb-1">
+        <button class="star-btn" data-val="1"><i class="fa fa-star"></i></button>
+        <button class="star-btn" data-val="2"><i class="fa fa-star"></i></button>
+        <button class="star-btn" data-val="3"><i class="fa fa-star"></i></button>
+        <button class="star-btn" data-val="4"><i class="fa fa-star"></i></button>
+        <button class="star-btn" data-val="5"><i class="fa fa-star"></i></button>
+      </div>
+      <div id="rating-label" class="rating-label mb-2">&nbsp;</div>
+      <textarea id="rating-comment" class="form-control mb-2" rows="2"
+                placeholder="Comentario opcional (qué estuvo bien / qué mejorar)..."></textarea>
+      <button id="btn-save-rating" class="btn btn-warning w-100 fw-bold" disabled>
+        <i class="fa fa-save me-1"></i>Guardar Calificación
+      </button>
+    </div>
+  </div>
+
+</div><!-- /tab-ejecutar -->
+
+
+<!-- ══════════════════════════════════════════════
+     TAB 2 — HISTORIAL
+══════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-historial">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="section-title mb-0">Historial de Informes Generados</h6>
+    <input type="text" id="hist-search" class="form-control form-control-sm w-auto" placeholder="Buscar evaluado...">
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle" id="hist-table">
+      <thead class="table-dark">
+        <tr>
+          <th>Fecha</th><th>Evaluado</th><th>Modelo</th><th>Planilla</th>
+          <th>Tiempo</th><th>Calificación</th><th>Comentario</th><th>Descargar</th>
+        </tr>
+      </thead>
+      <tbody id="hist-tbody"></tbody>
+    </table>
+  </div>
+  <p id="hist-empty" class="text-muted text-center py-4" style="display:none">
+    <i class="fa fa-inbox fa-2x d-block mb-2"></i>Aún no hay informes generados.
+  </p>
+</div><!-- /tab-historial -->
+
+
+<!-- ══════════════════════════════════════════════
+     TAB 3 — MÉTRICAS
+══════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-metricas">
+
+  <!-- Alerta calidad baja -->
+  <div id="alert-banner" class="alert alert-danger d-flex align-items-center mb-3">
+    <i class="fa fa-triangle-exclamation fa-lg me-2"></i>
+    <strong>Alerta de calidad:</strong>&nbsp;El promedio de las últimas 5 calificaciones está por debajo de 3/5. Revisar proceso de generación.
+  </div>
+
+  <!-- KPIs -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card p-3 text-center">
+        <div class="kpi-val" id="kpi-total">—</div>
+        <div class="kpi-label">Ejecuciones</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card p-3 text-center">
+        <div class="kpi-val" id="kpi-avg-rating">—</div>
+        <div class="kpi-label">Calif. promedio</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card p-3 text-center">
+        <div class="kpi-val" id="kpi-avg-time">—</div>
+        <div class="kpi-label">Tiempo prom. (s)</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card p-3 text-center">
+        <div class="kpi-val" id="kpi-pct-cal">—</div>
+        <div class="kpi-label">% Calificados</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráficos fila 1 -->
+  <div class="row g-3 mb-3">
+    <div class="col-md-7">
+      <div class="card chart-card p-3">
+        <h6 class="text-muted mb-3"><i class="fa fa-chart-line me-1"></i>Tendencia de Calidad</h6>
+        <canvas id="chart-trend" height="140"></canvas>
+      </div>
+    </div>
+    <div class="col-md-5">
+      <div class="card chart-card p-3">
+        <h6 class="text-muted mb-3"><i class="fa fa-calendar me-1"></i>Ejecuciones por Día</h6>
+        <canvas id="chart-bydate" height="140"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráficos fila 2 -->
+  <div class="row g-3 mb-3">
+    <div class="col-md-5">
+      <div class="card chart-card p-3">
+        <h6 class="text-muted mb-3"><i class="fa fa-file-word me-1"></i>Calidad Promedio por Modelo</h6>
+        <canvas id="chart-bymodel" height="160"></canvas>
+      </div>
+    </div>
+    <div class="col-md-7">
+      <div class="card chart-card p-3">
+        <h6 class="text-muted mb-3"><i class="fa fa-users me-1"></i>Promedio por Evaluado</h6>
+        <div class="table-responsive" style="max-height:220px;overflow-y:auto">
+          <table class="table table-sm table-hover mb-0">
+            <thead><tr><th>Evaluado</th><th>Prom.</th><th>N</th></tr></thead>
+            <tbody id="eval-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Distribución de tiempos -->
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <div class="card chart-card p-3">
+        <h6 class="text-muted mb-3"><i class="fa fa-stopwatch me-1"></i>Distribución de Tiempos de Ejecución (últimas 50)</h6>
+        <canvas id="chart-times" height="80"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-end">
+    <button class="btn btn-success" onclick="exportExcel()">
+      <i class="fa fa-file-excel me-1"></i>Exportar Excel de Calificaciones
+    </button>
+  </div>
+
+</div><!-- /tab-metricas -->
+
+</div><!-- /tab-content -->
+</div><!-- /container -->
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════
+// Estado global
+// ══════════════════════════════════════════════════════════════
+let selectedModelo   = null;
+let selectedPlanilla = null;
+let currentRunId     = null;
+let currentRating    = 0;
+let runStartTime     = null;
+let timerInterval    = null;
+let avgRunTime       = null;
+let charts           = {};
+
+const RATING_LABELS = {
+  1: 'Muy deficiente — necesita revisión completa',
+  2: 'Deficiente — hay errores importantes',
+  3: 'Aceptable — cumple lo básico',
+  4: 'Bueno — pequeñas mejoras posibles',
+  5: 'Excelente — informe de alta calidad'
+};
+
+// ══════════════════════════════════════════════════════════════
+// Reloj
+// ══════════════════════════════════════════════════════════════
+function updateClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleString('es-AR',{dateStyle:'short',timeStyle:'medium'});
+}
+updateClock(); setInterval(updateClock, 1000);
+
+// ══════════════════════════════════════════════════════════════
+// Arranque
+// ══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadLastRun();
+  await loadFiles();
+  await loadEstimatedTime();
+
+  document.querySelector('a[href="#tab-ejecutar"]').addEventListener('shown.bs.tab', loadFiles);
+  document.getElementById('tab-historial-link').addEventListener('click', loadHistory);
+  document.getElementById('tab-metricas-link').addEventListener('click', loadMetrics);
+  document.getElementById('hist-search').addEventListener('input', filterHistory);
+  document.getElementById('btn-run').addEventListener('click', startRun);
+  document.getElementById('btn-save-rating').addEventListener('click', saveRating);
+  setupStars();
+});
+
+// ══════════════════════════════════════════════════════════════
+// Última ejecución
+// ══════════════════════════════════════════════════════════════
+async function loadLastRun(){
+  const r = await fetch('/api/last-run').then(r=>r.json());
+  if(!r){ return; }
+  const stars = r.rating ? '★'.repeat(r.rating)+'☆'.repeat(5-r.rating) : 'Sin calificar';
+  const dt    = r.timestamp ? r.timestamp.slice(0,16).replace('T',' ') : '';
+  document.getElementById('lr-text').innerHTML =
+    `<strong>${dt}</strong> &nbsp;|&nbsp; Evaluado: <strong>${r.evaluado||'—'}</strong> &nbsp;|&nbsp;
+     Modelo: <strong>${r.modelo||'—'}</strong> &nbsp;|&nbsp; Planilla: <strong>${r.xlsx||'—'}</strong>
+     &nbsp;|&nbsp; <span class="text-warning">${stars}</span>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Archivos (modelos + planillas)
+// ══════════════════════════════════════════════════════════════
+async function loadFiles(){
+  const [filesData, qualData] = await Promise.all([
+    fetch('/api/files', {cache:'no-store'}).then(r=>r.json()),
+    fetch('/api/quality-by-model').then(r=>r.json())
+  ]);
+
+  // Modelos
+  const grid = document.getElementById('modelos-grid');
+  grid.innerHTML = '';
+  if(!filesData.modelos.length){
+    grid.innerHTML = '<div class="col-12 text-muted small">No se encontraron archivos .docx</div>';
+  } else {
+    filesData.modelos.forEach(m => {
+      const avg = qualData[m];
+      const stars = avg ? renderStarsSmall(avg) : '<span class="text-muted small">Sin datos</span>';
+      const col = document.createElement('div');
+      col.className = 'col-6 col-md-4 col-lg-3';
+      col.innerHTML = `
+        <div class="model-card p-3 h-100" data-modelo="${m}" onclick="selectModelo(this,'${m}')">
+          <i class="fa fa-file-word text-primary me-1"></i>
+          <span class="fw-semibold small">${m}</span>
+          <div class="mt-1">${stars}</div>
+          ${avg ? `<div class="text-muted" style="font-size:.72rem">Prom: ${avg}/5</div>` : ''}
+        </div>`;
+      grid.appendChild(col);
+    });
+  }
+
+  // Planillas
+  const list = document.getElementById('planillas-list');
+  list.innerHTML = '';
+  filesData.planillas.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'planilla-row p-2 mb-2 d-flex align-items-center gap-3';
+    row.dataset.planilla = p;
+    row.onclick = () => selectPlanilla(row, p);
+    row.innerHTML = `
+      <i class="fa fa-table text-success"></i>
+      <span class="flex-grow-1 fw-semibold small">${p}</span>
+      <span class="validation-dots text-muted small">—</span>`;
+    list.appendChild(row);
+  });
+}
+
+function renderStarsSmall(avg){
+  let html = '';
+  for(let i=1;i<=5;i++){
+    html += `<i class="fa fa-star" style="font-size:.75rem;color:${i<=Math.round(avg)?'#ffc107':'#ddd'}"></i>`;
+  }
+  return html;
+}
+
+function selectModelo(el, name){
+  document.querySelectorAll('.model-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedModelo = name;
+  checkRunReady();
+}
+
+async function selectPlanilla(el, name){
+  document.querySelectorAll('.planilla-row').forEach(r=>r.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedPlanilla = name;
+  checkRunReady();
+  await validatePlanilla(name, el);
+}
+
+async function validatePlanilla(name, rowEl){
+  const panel = document.getElementById('validation-panel');
+  const detail = document.getElementById('validation-detail');
+  panel.style.display = 'block';
+  detail.innerHTML = '<span class="text-muted small">Validando...</span>';
+
+  const res = await fetch('/api/validate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({xlsx: name})
+  }).then(r=>r.json());
+
+  if(res.error){ detail.innerHTML = `<span class="text-danger small">${res.error}</span>`; return; }
+
+  let html = '';
+  let allOk = true;
+  Object.entries(res).forEach(([sheet, info]) => {
+    const cls = info.ok ? 'dot-ok' : (info.rows > 0 ? 'dot-warn' : 'dot-err');
+    if(!info.ok) allOk = false;
+    html += `<span class="d-flex align-items-center gap-1 small">
+               <span class="sheet-dot ${cls}"></span>${sheet}
+               <span class="text-muted">(${info.msg})</span>
+             </span>`;
+  });
+
+  // semáforo resumen en la fila
+  const dots = rowEl.querySelector('.validation-dots');
+  dots.innerHTML = allOk
+    ? '<i class="fa fa-circle-check text-success"></i> <span class="text-success small">OK</span>'
+    : '<i class="fa fa-triangle-exclamation text-warning"></i> <span class="text-warning small">Revisar</span>';
+
+  detail.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Tiempo estimado
+// ══════════════════════════════════════════════════════════════
+async function loadEstimatedTime(){
+  const r = await fetch('/api/estimated-time').then(r=>r.json());
+  avgRunTime = r.estimated;
+  const row = document.getElementById('est-time-row');
+  if(r.estimated){
+    row.style.display = 'block';
+    document.getElementById('est-time-text').textContent =
+      `Tiempo estimado: ~${r.estimated}s (basado en ${r.samples} ejecución${r.samples!==1?'es':''})`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Validación para habilitar botón
+// ══════════════════════════════════════════════════════════════
+function checkRunReady(){
+  document.getElementById('btn-run').disabled = !(selectedModelo && selectedPlanilla);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Ejecución + SSE
+// ══════════════════════════════════════════════════════════════
+async function startRun(){
+  const evaluado = document.getElementById('inp-evaluado').value.trim();
+  if(!evaluado){
+    document.getElementById('inp-evaluado').focus();
+    document.getElementById('inp-evaluado').classList.add('is-invalid');
+    return;
+  }
+  document.getElementById('inp-evaluado').classList.remove('is-invalid');
+
+  // Mostrar progreso, ocultar rating
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('rating-section').style.display = 'none';
+  document.getElementById('btn-run').disabled = true;
+  setProgress(0, 'Iniciando...', 'running');
+
+  // Temporizador
+  runStartTime = Date.now();
+  clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 500);
+
+  const body = {xlsx: selectedPlanilla, modelo: selectedModelo, evaluado};
+  const resp = await fetch('/api/run', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  }).then(r=>r.json());
+
+  if(resp.error){ setProgress(-1, resp.error, 'error'); return; }
+  currentRunId = resp.run_id;
+  listenProgress(currentRunId);
+}
+
+function updateTimer(){
+  const elapsed = ((Date.now() - runStartTime) / 1000).toFixed(1);
+  document.getElementById('progress-timer').textContent = `⏱ ${elapsed}s`;
+  if(avgRunTime){
+    const remain = Math.max(0, avgRunTime - elapsed);
+    document.getElementById('progress-eta').textContent =
+      remain > 1 ? `~${remain.toFixed(0)}s restantes` : 'Finalizando...';
+  }
+}
+
+function listenProgress(runId){
+  const es = new EventSource(`/api/progress/${runId}`);
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    setProgress(ev.pct, ev.msg, ev.status);
+    if(ev.status === 'done'){
+      es.close();
+      clearInterval(timerInterval);
+      const elapsed = ((Date.now()-runStartTime)/1000).toFixed(1);
+      document.getElementById('progress-timer').textContent = `✓ ${elapsed}s`;
+      document.getElementById('progress-eta').textContent = '';
+      showRatingSection();
+      loadLastRun();
+    }
+    if(ev.status === 'error'){
+      es.close();
+      clearInterval(timerInterval);
+      document.getElementById('btn-run').disabled = false;
+    }
+  };
+  es.onerror = () => { es.close(); clearInterval(timerInterval); };
+}
+
+function setProgress(pct, msg, status){
+  const bar = document.getElementById('progress-bar');
+  const txt = document.getElementById('progress-msg');
+  const stp = document.getElementById('progress-step');
+
+  if(status === 'error'){
+    bar.style.width = '100%';
+    bar.textContent = 'Error';
+    bar.className = 'progress-bar bg-danger';
+    txt.textContent = msg;
+    stp.textContent = '';
+    return;
+  }
+  if(status === 'done'){
+    bar.style.width = '100%';
+    bar.textContent = '100%';
+    bar.className = 'progress-bar bg-success';
+    txt.innerHTML = '<i class="fa fa-check-circle text-success me-1"></i>' + msg;
+    stp.textContent = '';
+    return;
+  }
+  const p = Math.max(0, Math.min(100, pct));
+  bar.style.width = p + '%';
+  bar.textContent = p + '%';
+  bar.className = 'progress-bar progress-bar-striped progress-bar-animated';
+  stp.textContent = msg;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Calificación
+// ══════════════════════════════════════════════════════════════
+function showRatingSection(){
+  document.getElementById('rating-section').style.display = 'block';
+  currentRating = 0;
+  document.getElementById('btn-save-rating').disabled = true;
+  document.getElementById('rating-label').innerHTML = '&nbsp;';
+  document.querySelectorAll('.star-btn').forEach(s=>s.classList.remove('active'));
+  document.getElementById('rating-comment').value = '';
+}
+
+function setupStars(){
+  document.querySelectorAll('.star-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentRating = parseInt(btn.dataset.val);
+      document.querySelectorAll('.star-btn').forEach(s => {
+        s.classList.toggle('active', parseInt(s.dataset.val) <= currentRating);
+      });
+      document.getElementById('rating-label').textContent = RATING_LABELS[currentRating] || '';
+      document.getElementById('btn-save-rating').disabled = false;
+    });
+  });
+}
+
+async function saveRating(){
+  if(!currentRunId || !currentRating) return;
+  const comment = document.getElementById('rating-comment').value.trim();
+  await fetch('/api/rate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({run_id: currentRunId, rating: currentRating, comment})
+  });
+  document.getElementById('rating-section').style.display = 'none';
+  document.getElementById('btn-run').disabled = false;
+  await loadEstimatedTime(); // refresh badge
+  await loadFiles();         // refresh model quality badges
+}
+
+// ══════════════════════════════════════════════════════════════
+// Historial
+// ══════════════════════════════════════════════════════════════
+let _historyData = [];
+
+async function loadHistory(){
+  _historyData = await fetch('/api/history').then(r=>r.json());
+  renderHistory(_historyData);
+}
+
+function renderHistory(data){
+  const tbody = document.getElementById('hist-tbody');
+  const empty = document.getElementById('hist-empty');
+  tbody.innerHTML = '';
+  if(!data.length){ empty.style.display='block'; return; }
+  empty.style.display = 'none';
+  [...data].reverse().forEach(rec => {
+    const dt   = rec.timestamp ? rec.timestamp.slice(0,16).replace('T',' ') : '—';
+    const stars = rec.rating
+      ? `<span class="text-warning">${'★'.repeat(rec.rating)}${'☆'.repeat(5-rec.rating)}</span>`
+      : '<span class="text-muted small">—</span>';
+    const tiempo = rec.elapsed ? `${rec.elapsed}s` : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="small text-nowrap">${dt}</td>
+      <td><strong>${rec.evaluado||'—'}</strong></td>
+      <td class="small text-truncate" style="max-width:150px" title="${rec.modelo}">${rec.modelo||'—'}</td>
+      <td class="small text-truncate" style="max-width:130px" title="${rec.xlsx}">${rec.xlsx||'—'}</td>
+      <td class="small">${tiempo}</td>
+      <td>${stars}</td>
+      <td class="small text-muted" style="max-width:180px" title="${rec.comment||''}">${(rec.comment||'').slice(0,40)}</td>
+      <td>
+        ${rec.output ? `<a href="/download/${encodeURIComponent(rec.output)}" class="btn btn-sm btn-outline-primary" title="Descargar ${rec.output}">
+          <i class="fa fa-download"></i></a>` : '<span class="text-muted small">—</span>'}
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function filterHistory(){
+  const q = document.getElementById('hist-search').value.toLowerCase();
+  renderHistory(_historyData.filter(r =>
+    (r.evaluado||'').toLowerCase().includes(q) ||
+    (r.modelo||'').toLowerCase().includes(q) ||
+    (r.xlsx||'').toLowerCase().includes(q)
+  ));
+}
+
+// ══════════════════════════════════════════════════════════════
+// Métricas
+// ══════════════════════════════════════════════════════════════
+async function loadMetrics(){
+  const m = await fetch('/api/metrics').then(r=>r.json());
+
+  // KPIs
+  document.getElementById('kpi-total').textContent      = m.total;
+  document.getElementById('kpi-avg-rating').textContent = m.avg_rating ? `${m.avg_rating}/5` : '—';
+  document.getElementById('kpi-avg-time').textContent   = m.avg_time || '—';
+  document.getElementById('kpi-pct-cal').textContent    = m.total ? `${m.pct_calificado}%` : '—';
+
+  // Alerta
+  document.getElementById('alert-banner').style.display = m.alert ? 'flex' : 'none';
+
+  // Tabla evaluados
+  const evalBody = document.getElementById('eval-table-body');
+  evalBody.innerHTML = m.avg_by_eval.length
+    ? m.avg_by_eval.map(e => `<tr>
+        <td>${e.name}</td>
+        <td><span class="text-warning">${'★'.repeat(Math.round(e.avg))}${'☆'.repeat(5-Math.round(e.avg))}</span> ${e.avg}</td>
+        <td class="text-muted">${e.count}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="3" class="text-muted text-center">Sin datos</td></tr>';
+
+  buildCharts(m);
+}
+
+const BLUE  = 'rgba(46,84,150,.8)';
+const LIGHT = 'rgba(68,114,196,.5)';
+const ORNG  = 'rgba(255,102,0,.8)';
+const GREEN = 'rgba(40,167,69,.7)';
+
+function buildCharts(m){
+  // ── Tendencia de calidad ──
+  destroyChart('chart-trend');
+  if(m.trend.length){
+    charts['chart-trend'] = new Chart(document.getElementById('chart-trend'), {
+      type: 'line',
+      data: {
+        labels: m.trend.map(t=>`${t.evaluado} (${t.date})`),
+        datasets:[{
+          label:'Calificación',
+          data: m.trend.map(t=>t.rating),
+          borderColor: ORNG, backgroundColor:'rgba(255,102,0,.12)',
+          pointRadius:5, pointHoverRadius:7, tension:.3, fill:true
+        }]
+      },
+      options:{
+        scales:{y:{min:1,max:5,ticks:{stepSize:1}},x:{ticks:{maxRotation:40,font:{size:10}}}},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw}/5`}}},
+        responsive:true
+      }
+    });
+  }
+
+  // ── Ejecuciones por día ──
+  destroyChart('chart-bydate');
+  const dates  = Object.keys(m.by_date);
+  const counts = Object.values(m.by_date);
+  if(dates.length){
+    charts['chart-bydate'] = new Chart(document.getElementById('chart-bydate'), {
+      type:'bar',
+      data:{labels:dates, datasets:[{label:'Ejecuciones',data:counts,backgroundColor:LIGHT,borderColor:BLUE,borderWidth:1}]},
+      options:{scales:{y:{beginAtZero:true,ticks:{stepSize:1}}},plugins:{legend:{display:false}},responsive:true}
+    });
+  }
+
+  // ── Calidad por modelo ──
+  destroyChart('chart-bymodel');
+  const models  = Object.keys(m.quality_by_model);
+  const qvalues = Object.values(m.quality_by_model);
+  if(models.length){
+    charts['chart-bymodel'] = new Chart(document.getElementById('chart-bymodel'), {
+      type:'bar',
+      data:{
+        labels: models.map(m=>m.length>25?m.slice(0,25)+'…':m),
+        datasets:[{label:'Calificación prom.',data:qvalues,backgroundColor:qvalues.map(v=>v>=4?GREEN:(v>=3?LIGHT:ORNG)),borderRadius:6}]
+      },
+      options:{
+        indexAxis:'y',
+        scales:{x:{min:0,max:5,ticks:{stepSize:1}}},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw}/5`}}},
+        responsive:true
+      }
+    });
+  }
+
+  // ── Distribución de tiempos ──
+  destroyChart('chart-times');
+  if(m.times.length){
+    charts['chart-times'] = new Chart(document.getElementById('chart-times'), {
+      type:'bar',
+      data:{
+        labels: m.times.map((_,i)=>i+1),
+        datasets:[{label:'Tiempo (s)',data:m.times,backgroundColor:LIGHT,borderColor:BLUE,borderWidth:1}]
+      },
+      options:{
+        scales:{y:{beginAtZero:true,title:{display:true,text:'segundos'}}},
+        plugins:{legend:{display:false}},
+        responsive:true
+      }
+    });
+  }
+}
+
+function destroyChart(id){
+  if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Exportar Excel
+// ══════════════════════════════════════════════════════════════
+function exportExcel(){
+  window.location.href = '/api/export';
+}
+</script>
+</body>
+</html>

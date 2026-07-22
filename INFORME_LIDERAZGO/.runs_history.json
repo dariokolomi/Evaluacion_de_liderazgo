@@ -1,0 +1,13 @@
+[
+  {
+    "run_id": "f006a494",
+    "timestamp": "2026-04-22T18:04:01.963553",
+    "xlsx": "Planilla de Preguntas - Chavo 1.xlsx",
+    "modelo": "MODELO DE INFORME.docx",
+    "evaluado": "Chavo",
+    "output": "INFORME_Chavo_20260422_180400.docx",
+    "elapsed": 1.1,
+    "rating": null,
+    "comment": ""
+  }
+]
