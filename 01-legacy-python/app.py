@@ -8,8 +8,12 @@ from collections import defaultdict
 
 app = Flask(__name__)
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR   = os.path.abspath(os.path.join(BASE_DIR, '..', 'compartido'))
+INSTR_DIR  = os.path.join(DATA_DIR, 'instrumentos')
+MODEL_DIR  = os.path.join(DATA_DIR, 'modelos')
+OUT_DIR    = os.path.join(BASE_DIR, 'salidas')
 HISTORY    = os.path.join(BASE_DIR, '.runs_history.json')
-QUALITY_XL = os.path.join(BASE_DIR, 'CALIDAD DE INFORMES.xlsx')
+QUALITY_XL = os.path.join(OUT_DIR, 'CALIDAD DE INFORMES.xlsx')
 
 # ── Estado en memoria de corridas activas ──
 _runs = {}   # run_id -> {'events': [], 'done': bool}
@@ -57,6 +61,7 @@ def rebuild_excel():
         ws.cell(row_num, 8, rec.get('comment', ''))
         color = 'E2EFDA' if rating >= 4 else ('FFEB9C' if rating == 3 else 'FCE4D6')
         ws.cell(row_num, 7).fill = PatternFill('solid', fgColor=color)
+    os.makedirs(OUT_DIR, exist_ok=True)
     wb.save(QUALITY_XL)
 
 
@@ -71,10 +76,11 @@ def index():
 
 @app.route('/api/files')
 def list_files():
-    all_f = os.listdir(BASE_DIR)
     EXCLUIR_XLSX = {'calidad de informes.xlsx'}
-    modelos   = sorted([f for f in all_f if f.lower().endswith('.docx') and not f.lower().startswith('informe')])
-    planillas = sorted([f for f in all_f if f.lower().endswith('.xlsx') and f.lower() not in EXCLUIR_XLSX])
+    modelos   = sorted([f for f in os.listdir(MODEL_DIR)
+                        if f.lower().endswith('.docx') and not f.lower().startswith('informe')])
+    planillas = sorted([f for f in os.listdir(INSTR_DIR)
+                        if f.lower().endswith('.xlsx') and f.lower() not in EXCLUIR_XLSX])
     resp = jsonify({'modelos': modelos, 'planillas': planillas})
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     resp.headers['Pragma'] = 'no-cache'
@@ -90,7 +96,7 @@ def last_run():
 @app.route('/api/validate', methods=['POST'])
 def validate():
     xlsx = request.json.get('xlsx', '')
-    path = os.path.join(BASE_DIR, xlsx)
+    path = os.path.join(INSTR_DIR, os.path.basename(xlsx))
     if not os.path.exists(path):
         return jsonify({'error': 'Archivo no encontrado'}), 404
     required = ['NEO', 'CELID-A', 'POTENLID', 'CAMIN-A', 'CONLID-A']
@@ -141,9 +147,11 @@ def run_report():
     evaluado = (data.get('evaluado', '') or 'Evaluado').strip()
     if not xlsx or not modelo:
         return jsonify({'error': 'Faltan parámetros'}), 400
-    for f in [xlsx, modelo]:
-        if not os.path.exists(os.path.join(BASE_DIR, f)):
+    xlsx, modelo = os.path.basename(xlsx), os.path.basename(modelo)
+    for d, f in [(INSTR_DIR, xlsx), (MODEL_DIR, modelo)]:
+        if not os.path.exists(os.path.join(d, f)):
             return jsonify({'error': f'No se encontró: {f}'}), 404
+    os.makedirs(OUT_DIR, exist_ok=True)
 
     run_id      = uuid.uuid4().hex[:8]
     ts          = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -175,10 +183,10 @@ def _bg_run(run_id, xlsx, modelo, evaluado, output_name, radar_name):
     start = time.time()
     try:
         run_informe(
-            os.path.join(BASE_DIR, xlsx),
-            os.path.join(BASE_DIR, modelo),
-            os.path.join(BASE_DIR, output_name),
-            os.path.join(BASE_DIR, radar_name),
+            os.path.join(INSTR_DIR, xlsx),
+            os.path.join(MODEL_DIR, modelo),
+            os.path.join(OUT_DIR, output_name),
+            os.path.join(OUT_DIR, radar_name),
             evaluado,
             lambda pct, msg: _emit(run_id, pct, msg)
         )
@@ -306,7 +314,7 @@ def export():
 
 @app.route('/download/<path:filename>')
 def download(filename):
-    fp = os.path.join(BASE_DIR, filename)
+    fp = os.path.join(OUT_DIR, os.path.basename(filename))
     if os.path.exists(fp) and filename.lower().endswith('.docx'):
         return send_file(fp, as_attachment=True)
     return jsonify({'error': 'No encontrado'}), 404
