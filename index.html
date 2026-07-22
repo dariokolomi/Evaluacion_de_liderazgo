@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FRAN — Sistema de Perfilamiento de Liderazgo</title>
+<style>
+  :root {
+    --primary: #2E5496;
+    --primary-light: #4a7bc4;
+    --accent: #e63946;
+    --accent2: #2a9d8f;
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #21262d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --border: #30363d;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #8957e5;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* NAV */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(13,17,23,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px;
+  }
+  .nav-logo { font-weight: 700; font-size: 1.1rem; color: var(--primary-light); letter-spacing: 1px; }
+  .nav-links { display: flex; gap: 1.5rem; }
+  .nav-links a {
+    color: var(--text-muted); text-decoration: none; font-size: 0.88rem;
+    transition: color .2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; padding: 6rem 2rem 4rem;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(46,84,150,0.25) 0%, transparent 70%);
+    position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='30' cy='30' r='1' fill='%232E5496' opacity='.15'/%3E%3C/svg%3E") repeat;
+    animation: drift 40s linear infinite;
+  }
+  @keyframes drift { to { background-position: 60px 60px; } }
+
+  .hero-badge {
+    display: inline-block; padding: .3rem 1rem; border-radius: 999px;
+    background: rgba(46,84,150,0.2); border: 1px solid rgba(46,84,150,0.5);
+    font-size: .78rem; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--primary-light); margin-bottom: 1.5rem;
+  }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800;
+    line-height: 1.1; margin-bottom: 1rem;
+  }
+  .hero h1 span { color: var(--primary-light); }
+  .hero p {
+    font-size: 1.1rem; color: var(--text-muted); max-width: 600px;
+    margin: 0 auto 2.5rem;
+  }
+  .hero-ctas { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    padding: .7rem 1.6rem; border-radius: 8px; font-size: .95rem;
+    font-weight: 600; cursor: pointer; transition: all .2s; text-decoration: none;
+    display: inline-flex; align-items: center; gap: .5rem;
+  }
+  .btn-primary { background: var(--primary); color: #fff; border: 1px solid var(--primary-light); }
+  .btn-primary:hover { background: var(--primary-light); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--text-muted); transform: translateY(-1px); }
+
+  .stats-bar {
+    display: flex; gap: 3rem; flex-wrap: wrap; justify-content: center;
+    margin-top: 4rem; padding: 2rem; position: relative; z-index: 1;
+  }
+  .stat { text-align: center; }
+  .stat-num { font-size: 2rem; font-weight: 800; color: var(--primary-light); }
+  .stat-label { font-size: .8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+  /* SECTIONS */
+  section { padding: 5rem 2rem; max-width: 1100px; margin: 0 auto; }
+  section.full { max-width: none; }
+  .section-label {
+    font-size: .75rem; text-transform: uppercase; letter-spacing: 3px;
+    color: var(--primary-light); margin-bottom: .5rem;
+  }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 700; margin-bottom: 1rem; }
+  .section-sub { color: var(--text-muted); max-width: 600px; margin-bottom: 3rem; }
+
+  /* OVERVIEW CARDS */
+  .cards-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+  .card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; transition: all .2s;
+  }
+  .card:hover { border-color: var(--primary); transform: translateY(-3px); }
+  .card-icon {
+    width: 42px; height: 42px; border-radius: 10px; display: flex;
+    align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 1rem;
+  }
+  .card h3 { font-size: 1rem; margin-bottom: .5rem; }
+  .card p { font-size: .88rem; color: var(--text-muted); }
+
+  /* PIPELINE / FLOW */
+  .pipeline {
+    display: flex; align-items: flex-start; gap: 0; flex-wrap: wrap;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 16px; overflow: hidden;
+  }
+  .pipe-step {
+    flex: 1; min-width: 160px; padding: 1.5rem 1.2rem;
+    text-align: center; position: relative; cursor: pointer;
+    transition: background .2s;
+    border-right: 1px solid var(--border);
+  }
+  .pipe-step:last-child { border-right: none; }
+  .pipe-step:hover, .pipe-step.active { background: rgba(46,84,150,0.15); }
+  .pipe-num {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--primary); color: #fff;
+    font-weight: 700; font-size: .85rem; display: flex;
+    align-items: center; justify-content: center; margin: 0 auto .75rem;
+  }
+  .pipe-step h4 { font-size: .88rem; margin-bottom: .3rem; }
+  .pipe-step p { font-size: .75rem; color: var(--text-muted); }
+  .pipe-detail {
+    margin-top: 1.5rem; padding: 1.5rem;
+    background: var(--bg3); border-radius: 12px;
+    border: 1px solid var(--border); display: none;
+  }
+  .pipe-detail.visible { display: block; animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* INSTRUMENTS */
+  .instruments { display: flex; flex-direction: column; gap: 1rem; }
+  .instrument {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .instrument-header {
+    display: flex; align-items: center; gap: 1rem; padding: 1.2rem 1.5rem;
+    cursor: pointer; transition: background .2s;
+  }
+  .instrument-header:hover { background: rgba(255,255,255,0.03); }
+  .instr-badge {
+    padding: .25rem .7rem; border-radius: 6px; font-size: .72rem;
+    font-weight: 700; letter-spacing: 1px; flex-shrink: 0;
+  }
+  .instrument-header h3 { flex: 1; font-size: .98rem; }
+  .instr-meta { font-size: .78rem; color: var(--text-muted); display: flex; gap: 1.2rem; }
+  .instrument-body {
+    padding: 0 1.5rem; max-height: 0; overflow: hidden;
+    transition: max-height .4s ease, padding .3s;
+  }
+  .instrument-body.open { max-height: 600px; padding: 1rem 1.5rem 1.5rem; }
+  .dims { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+  .dim-tag {
+    padding: .3rem .7rem; border-radius: 6px; font-size: .75rem;
+    background: var(--bg3); border: 1px solid var(--border);
+  }
+  .scale-bar {
+    display: flex; align-items: center; gap .5rem; margin-top: 1rem;
+  }
+  .chevron { transition: transform .3s; color: var(--text-muted); font-size: .8rem; }
+  .instrument-header.open .chevron { transform: rotate(180deg); }
+
+  /* SCORING */
+  .score-visual {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; margin-top: 1rem;
+  }
+  .t-bar-row { display: flex; align-items: center; gap: 1rem; margin-bottom: .6rem; }
+  .t-bar-label { width: 100px; font-size: .82rem; color: var(--text-muted); }
+  .t-bar-track {
+    flex: 1; height: 20px; background: var(--bg3); border-radius: 4px;
+    overflow: hidden; position: relative;
+  }
+  .t-bar-fill {
+    height: 100%; border-radius: 4px;
+    transition: width 1s cubic-bezier(.4,0,.2,1);
+    background: linear-gradient(90deg, var(--primary), var(--primary-light));
+  }
+  .t-bar-val { width: 40px; text-align: right; font-size: .82rem; font-weight: 600; }
+  .t-line {
+    position: absolute; left: 50%; top: 0; width: 2px; height: 100%;
+    background: rgba(230,57,70,0.7); pointer-events: none;
+  }
+  .t-line::before {
+    content: 'T=50'; position: absolute; top: -18px; left: 50%;
+    transform: translateX(-50%); font-size: .65rem; color: var(--accent);
+    white-space: nowrap;
+  }
+
+  /* OUTPUTS */
+  .outputs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; }
+  .output-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; text-align: center;
+    transition: all .2s;
+  }
+  .output-card:hover { border-color: var(--primary-light); transform: translateY(-2px); }
+  .output-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+  .output-card h3 { font-size: .95rem; margin-bottom: .5rem; }
+  .output-card p { font-size: .82rem; color: var(--text-muted); }
+
+  /* INTERACTIVE DEMO */
+  .demo-area {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 16px; overflow: hidden;
+  }
+  .demo-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .demo-tab {
+    padding: .8rem 1.5rem; font-size: .85rem; cursor: pointer;
+    color: var(--text-muted); transition: all .2s; border-bottom: 2px solid transparent;
+    background: none; border-top: none; border-left: none; border-right: none;
+    color: var(--text-muted);
+  }
+  .demo-tab.active {
+    color: var(--primary-light); border-bottom-color: var(--primary-light);
+    background: rgba(46,84,150,0.05);
+  }
+  .demo-pane { display: none; padding: 2rem; }
+  .demo-pane.active { display: block; animation: fadeIn .25s ease; }
+  .code-block {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.2rem; font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: .78rem; line-height: 1.6; overflow-x: auto; color: #c9d1d9;
+  }
+  .code-block .k { color: #ff7b72; }
+  .code-block .s { color: #a5d6ff; }
+  .code-block .n { color: #79c0ff; }
+  .code-block .c { color: #8b949e; font-style: italic; }
+  .code-block .v { color: #ffa657; }
+  .code-block .f { color: #d2a8ff; }
+
+  /* RADAR DEMO */
+  .radar-container { display: flex; justify-content: center; align-items: center; padding: 1rem; }
+  canvas { max-width: 100%; }
+
+  /* PROFILE DEMO */
+  .profile-result {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;
+  }
+  .prof-card {
+    background: var(--bg3); border-radius: 10px; padding: 1rem;
+    text-align: center; border: 1px solid var(--border);
+  }
+  .prof-card .score { font-size: 2rem; font-weight: 800; color: var(--primary-light); }
+  .prof-card .label { font-size: .75rem; color: var(--text-muted); margin-bottom: .3rem; }
+  .prof-card .level { font-size: .8rem; font-weight: 600; }
+  .level-high { color: var(--green); }
+  .level-mid { color: var(--orange); }
+  .level-low { color: var(--accent); }
+
+  /* TECH STACK */
+  .tech-grid { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .tech-pill {
+    display: flex; align-items: center; gap: .5rem;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: .6rem 1rem; font-size: .85rem;
+  }
+  .tech-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* REPORT SECTIONS */
+  .report-sections { display: flex; flex-direction: column; gap: .5rem; }
+  .report-section {
+    display: flex; align-items: center; gap: 1rem;
+    background: var(--bg3); border-radius: 8px; padding: 1rem 1.2rem;
+    cursor: pointer; transition: background .2s;
+  }
+  .report-section:hover { background: rgba(46,84,150,0.15); }
+  .report-num {
+    width: 26px; height: 26px; border-radius: 6px;
+    background: var(--primary); color: #fff; font-size: .75rem;
+    font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .report-section p { font-size: .85rem; color: var(--text-muted); }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border); padding: 2rem;
+    text-align: center; color: var(--text-muted); font-size: .82rem;
+  }
+
+  /* TOOLTIP */
+  [data-tip] { position: relative; cursor: help; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); font-size: .75rem; padding: .4rem .7rem;
+    border-radius: 6px; white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity .2s;
+  }
+  [data-tip]:hover::after { opacity: 1; }
+
+  /* SCROLL REVEAL */
+  .reveal { opacity: 0; transform: translateY(24px); transition: all .6s ease; }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  /* SEPARATOR */
+  .sep { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  @media (max-width: 600px) {
+    .pipe-step { min-width: 120px; }
+    .nav-links { display: none; }
+    .stats-bar { gap: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">FRAN</div>
+  <div class="nav-links">
+    <a href="#que-es">¿Qué es?</a>
+    <a href="#flujo">Flujo</a>
+    <a href="#instrumentos">Instrumentos</a>
+    <a href="#demo">Demo</a>
+    <a href="#salidas">Salidas</a>
+    <a href="#tech">Tecnología</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div style="position:relative;z-index:1">
+    <div class="hero-badge">Sistema de Perfilamiento de Liderazgo</div>
+    <h1>Automatización de<br><span>Evaluación Psicométrica</span><br>para Líderes</h1>
+    <p>FRAN toma respuestas crudas de 5 instrumentos estandarizados y genera automáticamente puntuaciones, gráficos y un informe Word profesional de liderazgo.</p>
+    <div class="hero-ctas">
+      <a href="#flujo" class="btn btn-primary">Ver cómo funciona ↓</a>
+      <a href="#demo" class="btn btn-ghost">Ver demo interactiva</a>
+    </div>
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-num">5</div><div class="stat-label">Instrumentos</div></div>
+      <div class="stat"><div class="stat-num">133</div><div class="stat-label">Ítems evaluados</div></div>
+      <div class="stat"><div class="stat-num">3</div><div class="stat-label">Scripts Python</div></div>
+      <div class="stat"><div class="stat-num">3</div><div class="stat-label">Gráficos generados</div></div>
+      <div class="stat"><div class="stat-num">5</div><div class="stat-label">Secciones del informe</div></div>
+    </div>
+  </div>
+</div>
+
+<hr class="sep">
+
+<!-- QUE ES -->
+<section id="que-es">
+  <div class="reveal">
+    <div class="section-label">Visión general</div>
+    <h2>¿Qué hace FRAN?</h2>
+    <p class="section-sub">Un pipeline automatizado que convierte hojas de respuestas en un informe de liderazgo completo, sin intervención manual.</p>
+    <div class="cards-3">
+      <div class="card">
+        <div class="card-icon" style="background:rgba(46,84,150,0.15)">📋</div>
+        <h3>Ingesta de respuestas</h3>
+        <p>Lee 133 respuestas de 5 tests psicométricos (NEO, CELID, POTENLID, CAMIN, CONLID) definidas en diccionarios Python.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(42,157,143,0.15)">⚙️</div>
+        <h3>Corrección y normas</h3>
+        <p>Aplica claves de corrección estándar, puntuación inversa, y baremos de normas poblacionales importados desde Excel para calcular T-scores y percentiles.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(230,57,70,0.15)">📊</div>
+        <h3>Visualización</h3>
+        <p>Genera automáticamente 3 gráficos matplotlib: perfil NEO, estilos de liderazgo y mapa de competencias radial evaluado vs. ideal.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(137,87,229,0.15)">📄</div>
+        <h3>Informe Word profesional</h3>
+        <p>Construye un documento .docx de 5 secciones heredando el template institucional: tablas con código de colores, gráficos incrustados y marco teórico.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(210,153,34,0.15)">🔁</div>
+        <h3>Reproducible</h3>
+        <p>Para evaluar a un nuevo líder basta cambiar los diccionarios de respuestas en corregir.py y ejecutar los 3 scripts. Sin tocar nada más.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(63,185,80,0.15)">📁</div>
+        <h3>Trazabilidad total</h3>
+        <p>Guarda respuestas crudas en Markdown y un log de sesión con metodología, resultados y protocolo de reproducción.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- FLUJO -->
+<section id="flujo" style="max-width:1100px">
+  <div class="reveal">
+    <div class="section-label">Pipeline</div>
+    <h2>Flujo de trabajo</h2>
+    <p class="section-sub">Hacé clic en cada paso para ver los detalles de implementación.</p>
+    <div class="pipeline" id="pipeline">
+      <div class="pipe-step active" data-step="0">
+        <div class="pipe-num">1</div>
+        <h4>Respuestas</h4>
+        <p>Entrada del evaluado</p>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:.3rem">↓</div>
+      </div>
+      <div class="pipe-step" data-step="1">
+        <div class="pipe-num">2</div>
+        <h4>corregir.py</h4>
+        <p>Motor de corrección</p>
+      </div>
+      <div class="pipe-step" data-step="2">
+        <div class="pipe-num">3</div>
+        <h4>graficos.py</h4>
+        <p>Generación de gráficos</p>
+      </div>
+      <div class="pipe-step" data-step="3">
+        <div class="pipe-num">4</div>
+        <h4>generar_informe.py</h4>
+        <p>Construcción del informe</p>
+      </div>
+      <div class="pipe-step" data-step="4">
+        <div class="pipe-num">5</div>
+        <h4>Entregables</h4>
+        <p>Outputs finales</p>
+      </div>
+    </div>
+
+    <div class="pipe-detail visible" id="detail-0">
+      <h4 style="margin-bottom:.8rem;color:var(--primary-light)">Paso 1 — Respuestas del evaluado</h4>
+      <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:1rem">Los 133 ítems de los 5 instrumentos se cargan como diccionarios Python en <code>corregir.py</code> o se registran en <code>respuestas_evaluado.md</code> para trazabilidad.</p>
+      <div class="code-block">
+<span class="c"># NEO-FFI: 60 respuestas (letras a–e)</span>
+neo_resp = {<span class="n">1</span>:<span class="s">'d'</span>, <span class="n">2</span>:<span class="s">'c'</span>, <span class="n">3</span>:<span class="s">'a'</span>, ..., <span class="n">60</span>:<span class="s">'b'</span>}
+
+<span class="c"># CELID-A: 34 ítems (escala 1–5)</span>
+celid = {<span class="n">1</span>:<span class="v">4</span>, <span class="n">2</span>:<span class="v">5</span>, <span class="n">3</span>:<span class="v">3</span>, ..., <span class="n">34</span>:<span class="v">2</span>}
+
+<span class="c"># POTENLID: 9 ítems, CAMIN: 12 ítems, CONLID: 18 ítems</span>
+poten = {<span class="n">1</span>:<span class="v">5</span>, ...}  |  cam = {<span class="n">1</span>:<span class="v">6</span>, ...}  |  con = {<span class="n">1</span>:<span class="v">4</span>, ...}
+      </div>
+    </div>
+
+    <div class="pipe-detail" id="detail-1">
+      <h4 style="margin-bottom:.8rem;color:var(--primary-light)">Paso 2 — corregir.py: Motor de corrección</h4>
+      <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:1rem">Aplica las claves estándar Costa & McCrae, puntaje inverso en 28 ítems, y mapea puntajes brutos a T-scores usando tablas de baremos importadas de Excel (Casullo & Pérez 2008).</p>
+      <div class="code-block">
+<span class="c"># Clave NEO: {ítem: (dimensión, dirección)}</span>
+neo_key = {
+  <span class="n">1</span>: (<span class="s">'N'</span>, <span class="v">1</span>),   <span class="c"># Neurotismo, directo</span>
+  <span class="n">6</span>: (<span class="s">'N'</span>, <span class="v">-1</span>),  <span class="c"># Neurotismo, inverso</span>
+  ...
+}
+
+<span class="c"># Conversión letra → valor (0–4)</span>
+letra_val = {<span class="s">'a'</span>:<span class="v">0</span>, <span class="s">'b'</span>:<span class="v">1</span>, <span class="s">'c'</span>:<span class="v">2</span>, <span class="s">'d'</span>:<span class="v">3</span>, <span class="s">'e'</span>:<span class="v">4</span>}
+
+<span class="c"># Mapeo bruto → T-score via tabla Excel</span>
+<span class="k">def</span> <span class="f">tscore</span>(bruto, tabla_dim):
+    <span class="k">return</span> tabla_dim[bruto]  <span class="c"># lookup directo</span>
+
+<span class="c"># Percentil para CELID / CAMIN / CONLID / POTENLID</span>
+<span class="k">def</span> <span class="f">percentil</span>(valor, baremo):
+    <span class="k">for</span> p, corte <span class="k">in</span> <span class="f">sorted</span>(baremo.items(), reverse=<span class="v">True</span>):
+        <span class="k">if</span> valor >= corte: <span class="k">return</span> p
+      </div>
+    </div>
+
+    <div class="pipe-detail" id="detail-2">
+      <h4 style="margin-bottom:.8rem;color:var(--primary-light)">Paso 3 — graficos.py: Generación de visualizaciones</h4>
+      <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:1rem">Genera 3 archivos PNG con matplotlib usando los scores calculados en el paso anterior.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-top:.5rem">
+        <div style="background:var(--bg3);border-radius:8px;padding:1rem;border:1px solid var(--border)">
+          <div style="font-size:1.5rem;margin-bottom:.5rem">📊</div>
+          <strong style="font-size:.85rem">grafico_neo.png</strong>
+          <p style="font-size:.78rem;color:var(--text-muted);margin-top:.3rem">Barras horizontales de T-scores NEO vs. media poblacional (T=50). Muestra las 5 dimensiones de personalidad.</p>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:1rem;border:1px solid var(--border)">
+          <div style="font-size:1.5rem;margin-bottom:.5rem">📈</div>
+          <strong style="font-size:.85rem">grafico_celid.png</strong>
+          <p style="font-size:.78rem;color:var(--text-muted);margin-top:.3rem">Barras agrupadas: estilos Transformacional, Transaccional y Laissez-Faire con sus 9 dimensiones.</p>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:1rem;border:1px solid var(--border)">
+          <div style="font-size:1.5rem;margin-bottom:.5rem">🕸️</div>
+          <strong style="font-size:.85rem">grafico_radar.png</strong>
+          <p style="font-size:.78rem;color:var(--text-muted);margin-top:.3rem">Gráfico polar con 10 competencias: evaluado (rojo) vs. líder situacional ideal (azul). Gap analysis visual.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipe-detail" id="detail-3">
+      <h4 style="margin-bottom:.8rem;color:var(--primary-light)">Paso 4 — generar_informe.py: Informe Word</h4>
+      <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:1rem">Abre el template institucional <code>MODELO_DE_INFORME_1.docx</code>, limpia el cuerpo preservando estilos y construye 5 secciones dinámicamente con python-docx.</p>
+      <div class="code-block">
+<span class="k">from</span> docx <span class="k">import</span> Document
+<span class="k">from</span> docx.shared <span class="k">import</span> RGBColor, Pt, Inches
+
+doc = <span class="f">Document</span>(<span class="s">'MODELO_DE_INFORME_1.docx'</span>)
+<span class="c"># Limpiar cuerpo, preservar sección/estilos institucionales</span>
+<span class="k">for</span> elem <span class="k">in</span> list(doc.element.body): doc.element.body.remove(elem)
+
+<span class="c"># Tablas con color condicional por nivel</span>
+colores = {<span class="s">'Alto'</span>:<span class="s">'#3fb950'</span>, <span class="s">'Medio'</span>:<span class="s">'#d29922'</span>, <span class="s">'Bajo'</span>:<span class="s">'#e63946'</span>}
+
+<span class="c"># Insertar gráficos</span>
+doc.add_picture(<span class="s">'grafico_neo.png'</span>, width=<span class="f">Inches</span>(<span class="v">6</span>))
+doc.add_picture(<span class="s">'grafico_radar.png'</span>, width=<span class="f">Inches</span>(<span class="v">6</span>))
+
+doc.save(<span class="s">'INFORME_LIDERAZGO.docx'</span>)
+      </div>
+    </div>
+
+    <div class="pipe-detail" id="detail-4">
+      <h4 style="margin-bottom:.8rem;color:var(--primary-light)">Paso 5 — Entregables finales</h4>
+      <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:1rem">Todos los archivos generados por el pipeline de los 3 scripts.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:.75rem">
+        <div class="tech-pill"><span class="tech-dot" style="background:#d29922"></span> INFORME_LIDERAZGO.docx</div>
+        <div class="tech-pill"><span class="tech-dot" style="background:var(--primary-light)"></span> grafico_neo.png</div>
+        <div class="tech-pill"><span class="tech-dot" style="background:var(--primary-light)"></span> grafico_celid.png</div>
+        <div class="tech-pill"><span class="tech-dot" style="background:var(--primary-light)"></span> grafico_radar.png</div>
+        <div class="tech-pill"><span class="tech-dot" style="background:var(--accent2)"></span> respuestas_evaluado.md</div>
+        <div class="tech-pill"><span class="tech-dot" style="background:var(--accent2)"></span> SESION_CONTINUIDAD.md</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- INSTRUMENTOS -->
+<section id="instrumentos">
+  <div class="reveal">
+    <div class="section-label">Instrumentos psicométricos</div>
+    <h2>Los 5 tests que evalúa FRAN</h2>
+    <p class="section-sub">Hacé clic en cada instrumento para ver detalles, dimensiones y proceso de corrección.</p>
+    <div class="instruments">
+
+      <div class="instrument">
+        <div class="instrument-header" onclick="toggleInstr(this)">
+          <div class="instr-badge" style="background:rgba(46,84,150,0.25);color:#79c0ff;border:1px solid rgba(46,84,150,0.5)">NEO-FFI</div>
+          <h3>Inventario de Personalidad (Big Five)</h3>
+          <div class="instr-meta">
+            <span data-tip="Número de ítems">60 ítems</span>
+            <span data-tip="Escala de respuesta">Escala a–e (0–4)</span>
+            <span data-tip="Output del test">5 T-scores</span>
+          </div>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="instrument-body">
+          <p style="font-size:.88rem;color:var(--text-muted)">Evalúa los 5 grandes factores de personalidad de Costa & McCrae (1992). Es el instrumento más complejo: usa puntuación inversa en 28 de sus 60 ítems y normas españolas (Casullo & Pérez 2008).</p>
+          <div class="dims">
+            <div class="dim-tag" style="border-color:#e63946;color:#e63946">N — Neurotismo</div>
+            <div class="dim-tag" style="border-color:#ffa657;color:#ffa657">E — Extraversión</div>
+            <div class="dim-tag" style="border-color:#3fb950;color:#3fb950">O — Apertura a la experiencia</div>
+            <div class="dim-tag" style="border-color:#79c0ff;color:#79c0ff">A — Amabilidad</div>
+            <div class="dim-tag" style="border-color:#d2a8ff;color:#d2a8ff">C — Responsabilidad</div>
+          </div>
+          <div style="margin-top:1rem;padding:.8rem;background:var(--bg3);border-radius:8px;font-size:.82rem">
+            <strong style="color:var(--primary-light)">Proceso de corrección:</strong>
+            <ol style="margin-left:1.2rem;margin-top:.4rem;color:var(--text-muted);line-height:1.8">
+              <li>Convierte letra (a–e) a valor numérico (0–4)</li>
+              <li>Aplica inversión: valor_correcto = 4 - valor_raw (para los 28 ítems marcados)</li>
+              <li>Suma los 12 ítems de cada dimensión → puntaje bruto (0–48)</li>
+              <li>Mapea bruto → T-score via tabla baremo Excel (media=50, DS=10)</li>
+              <li>Clasifica nivel: T&lt;35=Muy Bajo, 35–44=Bajo, 45–54=Medio, 55–64=Alto, &gt;64=Muy Alto</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="instrument">
+        <div class="instrument-header" onclick="toggleInstr(this)">
+          <div class="instr-badge" style="background:rgba(42,157,143,0.2);color:#2a9d8f;border:1px solid rgba(42,157,143,0.4)">CELID-A</div>
+          <h3>Cuestionario de Estilos de Liderazgo</h3>
+          <div class="instr-meta">
+            <span>34 ítems</span><span>Escala 1–5</span><span>9 dimensiones + 3 estilos</span>
+          </div>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="instrument-body">
+          <p style="font-size:.88rem;color:var(--text-muted)">Mide los tres grandes estilos de liderazgo según el modelo de Bass & Avolio. Calcula medias por agrupación de ítems y compara contra baremos de percentiles.</p>
+          <div class="dims">
+            <div class="dim-tag" style="border-color:var(--accent2);color:var(--accent2)">Carisma/Inspiración</div>
+            <div class="dim-tag" style="border-color:var(--accent2);color:var(--accent2)">Estimulación intelectual</div>
+            <div class="dim-tag" style="border-color:var(--accent2);color:var(--accent2)">Consideración individual</div>
+            <div class="dim-tag" style="border-color:var(--orange);color:var(--orange)">Recompensa contingente</div>
+            <div class="dim-tag" style="border-color:var(--orange);color:var(--orange)">Dirección por excepción</div>
+            <div class="dim-tag" style="border-color:var(--accent);color:var(--accent)">Laissez-Faire</div>
+          </div>
+          <div style="margin-top:1rem;padding:.8rem;background:var(--bg3);border-radius:8px;font-size:.82rem">
+            <strong style="color:var(--primary-light)">Estilos resultantes:</strong>
+            <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:.5rem">
+              <span style="color:var(--accent2)">● Transformacional</span>
+              <span style="color:var(--orange)">● Transaccional</span>
+              <span style="color:var(--accent)">● Laissez-Faire</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="instrument">
+        <div class="instrument-header" onclick="toggleInstr(this)">
+          <div class="instr-badge" style="background:rgba(210,153,34,0.2);color:#d29922;border:1px solid rgba(210,153,34,0.4)">POTENLID</div>
+          <h3>Fuentes de Motivación para el Liderazgo</h3>
+          <div class="instr-meta">
+            <span>9 ítems</span><span>Escala 1–5</span><span>3 tipos de motivación</span>
+          </div>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="instrument-body">
+          <p style="font-size:.88rem;color:var(--text-muted)">Identifica las fuentes motivacionales que impulsan la conducta de liderazgo: intrínsecas, extrínsecas y socio-normativas. 3 ítems por categoría.</p>
+          <div class="dims">
+            <div class="dim-tag">Motivación Intrínseca</div>
+            <div class="dim-tag">Motivación Extrínseca</div>
+            <div class="dim-tag">Motivación Socio-Normativa</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="instrument">
+        <div class="instrument-header" onclick="toggleInstr(this)">
+          <div class="instr-badge" style="background:rgba(137,87,229,0.2);color:#8957e5;border:1px solid rgba(137,87,229,0.4)">CAMIN-A</div>
+          <h3>Conductas del Líder — Camino-Meta</h3>
+          <div class="instr-meta">
+            <span>12 ítems</span><span>Escala 1–7</span><span>4 estilos conductuales</span>
+          </div>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="instrument-body">
+          <p style="font-size:.88rem;color:var(--text-muted)">Basado en la teoría del Camino-Meta de House (1971). Evalúa los comportamientos concretos que el líder exhibe para orientar a sus colaboradores. 3 ítems por estilo.</p>
+          <div class="dims">
+            <div class="dim-tag" style="border-color:var(--purple);color:var(--purple)">Directivo</div>
+            <div class="dim-tag" style="border-color:var(--purple);color:var(--purple)">Considerado (Apoyo)</div>
+            <div class="dim-tag" style="border-color:var(--purple);color:var(--purple)">Participativo</div>
+            <div class="dim-tag" style="border-color:var(--purple);color:var(--purple)">Orientado a metas</div>
+          </div>
+          <div style="margin-top:1rem;padding:.8rem;background:var(--bg3);border-radius:8px;font-size:.82rem;color:var(--text-muted)">
+            <strong style="color:var(--primary-light)">Ejemplo de perfil:</strong> Participativo (P90) · Directivo (P75) · Considerado (P62) · Metas (P62)
+          </div>
+        </div>
+      </div>
+
+      <div class="instrument">
+        <div class="instrument-header" onclick="toggleInstr(this)">
+          <div class="instr-badge" style="background:rgba(63,185,80,0.2);color:#3fb950;border:1px solid rgba(63,185,80,0.4)">CONLID-A</div>
+          <h3>Foco Conductual del Liderazgo</h3>
+          <div class="instr-meta">
+            <span>18 ítems</span><span>Escala 1–5</span><span>3 focos</span>
+          </div>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="instrument-body">
+          <p style="font-size:.88rem;color:var(--text-muted)">Mide el énfasis conductual del líder en tres orientaciones clave. 6 ítems por dimensión, comparados contra baremos percentilares.</p>
+          <div class="dims">
+            <div class="dim-tag" style="border-color:var(--green);color:var(--green)">Orientado al Cambio</div>
+            <div class="dim-tag" style="border-color:var(--green);color:var(--green)">Orientado a Relaciones</div>
+            <div class="dim-tag" style="border-color:var(--green);color:var(--green)">Orientado a la Tarea</div>
+          </div>
+          <div style="margin-top:1rem;padding:.8rem;background:var(--bg3);border-radius:8px;font-size:.82rem;color:var(--text-muted)">
+            <strong style="color:var(--primary-light)">Ejemplo de perfil:</strong> Cambio (P80) · Relaciones (P65) · Tarea (P50)
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- DEMO -->
+<section id="demo">
+  <div class="reveal">
+    <div class="section-label">Demo interactiva</div>
+    <h2>Simulación de resultados reales</h2>
+    <p class="section-sub">Estos son los resultados del líder evaluado en el proyecto, recreados interactivamente.</p>
+    <div class="demo-area">
+      <div class="demo-tabs">
+        <button class="demo-tab active" onclick="switchTab(this,'tab-neo')">Perfil NEO</button>
+        <button class="demo-tab" onclick="switchTab(this,'tab-celid')">Estilos CELID</button>
+        <button class="demo-tab" onclick="switchTab(this,'tab-radar')">Radar de Competencias</button>
+        <button class="demo-tab" onclick="switchTab(this,'tab-report')">Estructura del Informe</button>
+      </div>
+
+      <!-- NEO TAB -->
+      <div class="demo-pane active" id="tab-neo">
+        <h3 style="margin-bottom:.5rem;font-size:1rem">Perfil de Personalidad NEO-FFI</h3>
+        <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1.5rem">T-scores vs. media poblacional (T=50). La línea roja marca el punto de referencia normativo.</p>
+        <div class="score-visual">
+          <div class="t-bar-row">
+            <div class="t-bar-label">Neurotismo</div>
+            <div class="t-bar-track">
+              <div class="t-bar-fill" style="width:0" data-target="48.75" id="bar-N"></div>
+              <div class="t-line"></div>
+            </div>
+            <div class="t-bar-val">39</div>
+            <span style="font-size:.78rem;color:var(--accent);margin-left:.5rem">Bajo</span>
+          </div>
+          <div class="t-bar-row">
+            <div class="t-bar-label">Extraversión</div>
+            <div class="t-bar-track">
+              <div class="t-bar-fill" style="width:0" data-target="80" id="bar-E" style="background:linear-gradient(90deg,var(--accent2),#4fc2b0)"></div>
+              <div class="t-line"></div>
+            </div>
+            <div class="t-bar-val">64</div>
+            <span style="font-size:.78rem;color:var(--green);margin-left:.5rem">Alto</span>
+          </div>
+          <div class="t-bar-row">
+            <div class="t-bar-label">Apertura</div>
+            <div class="t-bar-track">
+              <div class="t-bar-fill" style="width:0" data-target="80" id="bar-O"></div>
+              <div class="t-line"></div>
+            </div>
+            <div class="t-bar-val">64</div>
+            <span style="font-size:.78rem;color:var(--green);margin-left:.5rem">Alto</span>
+          </div>
+          <div class="t-bar-row">
+            <div class="t-bar-label">Amabilidad</div>
+            <div class="t-bar-track">
+              <div class="t-bar-fill" style="width:0" data-target="46.25" id="bar-A"></div>
+              <div class="t-line"></div>
+            </div>
+            <div class="t-bar-val">37</div>
+            <span style="font-size:.78rem;color:var(--accent);margin-left:.5rem">Bajo</span>
+          </div>
+          <div class="t-bar-row">
+            <div class="t-bar-label">Responsab.</div>
+            <div class="t-bar-track">
+              <div class="t-bar-fill" style="width:0" data-target="66.25" id="bar-C"></div>
+              <div class="t-line"></div>
+            </div>
+            <div class="t-bar-val">53</div>
+            <span style="font-size:.78rem;color:var(--orange);margin-left:.5rem">Medio</span>
+          </div>
+        </div>
+        <div style="margin-top:1rem;padding:.8rem;background:var(--bg3);border-radius:8px;font-size:.82rem;color:var(--text-muted)">
+          <strong style="color:var(--primary-light)">Interpretación:</strong> Alta extraversión y apertura combinadas con neurotismo bajo sugieren un líder emocionalmente estable, creativo y socialmente activo. La baja amabilidad puede expresarse como asertividad y firmeza en la toma de decisiones.
+        </div>
+      </div>
+
+      <!-- CELID TAB -->
+      <div class="demo-pane" id="tab-celid">
+        <h3 style="margin-bottom:.5rem;font-size:1rem">Estilos de Liderazgo — CELID-A</h3>
+        <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1.5rem">Media por estilo (escala 1–5). Un perfil ideal muestra alto Transformacional, moderado Transaccional, bajo Laissez-Faire.</p>
+        <div style="display:flex;flex-direction:column;gap:1rem">
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:.4rem">
+              <span style="font-size:.88rem;color:var(--accent2)">Transformacional</span>
+              <span style="font-size:.88rem;font-weight:700">4.29 / 5</span>
+            </div>
+            <div style="height:14px;background:var(--bg3);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:0;border-radius:4px;background:var(--accent2);transition:width 1.2s ease" data-target="85.8" class="celid-bar"></div>
+            </div>
+            <div style="font-size:.75rem;color:var(--text-muted);margin-top:.3rem">Alto — Carisma · Inspiración · Estimulación intelectual · Consideración individual</div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:.4rem">
+              <span style="font-size:.88rem;color:var(--orange)">Transaccional</span>
+              <span style="font-size:.88rem;font-weight:700">3.45 / 5</span>
+            </div>
+            <div style="height:14px;background:var(--bg3);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:0;border-radius:4px;background:var(--orange);transition:width 1.2s ease" data-target="69" class="celid-bar"></div>
+            </div>
+            <div style="font-size:.75rem;color:var(--text-muted);margin-top:.3rem">Medio — Recompensa contingente · Dirección por excepción</div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:.4rem">
+              <span style="font-size:.88rem;color:var(--accent)">Laissez-Faire</span>
+              <span style="font-size:.88rem;font-weight:700">1.83 / 5</span>
+            </div>
+            <div style="height:14px;background:var(--bg3);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:0;border-radius:4px;background:var(--accent);transition:width 1.2s ease" data-target="36.6" class="celid-bar"></div>
+            </div>
+            <div style="font-size:.75rem;color:var(--text-muted);margin-top:.3rem">Bajo — Perfil óptimo: mínima evitación de la responsabilidad</div>
+          </div>
+        </div>
+        <div style="margin-top:1.5rem;padding:.8rem;background:rgba(42,157,143,0.1);border-radius:8px;border:1px solid rgba(42,157,143,0.3);font-size:.82rem;color:var(--text-muted)">
+          <strong style="color:var(--accent2)">Conclusión:</strong> Perfil de <strong style="color:var(--text)">líder transformacional</strong> — inspira, motiva y desarrolla a sus colaboradores. Bajo laissez-faire confirma presencia activa y compromiso con la gestión.
+        </div>
+      </div>
+
+      <!-- RADAR TAB -->
+      <div class="demo-pane" id="tab-radar">
+        <h3 style="margin-bottom:.5rem;font-size:1rem">Mapa de Competencias — Evaluado vs. Líder Ideal</h3>
+        <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1.5rem">
+          <span style="color:var(--accent)">●</span> Evaluado &nbsp;&nbsp;
+          <span style="color:var(--primary-light)">●</span> Líder situacional ideal
+        </p>
+        <div class="radar-container">
+          <canvas id="radarCanvas" width="480" height="480"></canvas>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem;margin-top:1rem">
+          <div style="font-size:.75rem;color:var(--text-muted);padding:.5rem;background:var(--bg3);border-radius:6px">
+            <strong style="color:var(--text)">Brechas mínimas</strong><br>Motivación, Transformacional, Participativo
+          </div>
+          <div style="font-size:.75rem;color:var(--text-muted);padding:.5rem;background:var(--bg3);border-radius:6px">
+            <strong style="color:var(--text)">Áreas de desarrollo</strong><br>Amabilidad, enfoque en la tarea/relaciones
+          </div>
+        </div>
+      </div>
+
+      <!-- REPORT TAB -->
+      <div class="demo-pane" id="tab-report">
+        <h3 style="margin-bottom:.5rem;font-size:1rem">Estructura del informe INFORME_LIDERAZGO.docx</h3>
+        <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1.5rem">5 secciones generadas automáticamente desde el template institucional.</p>
+        <div class="report-sections">
+          <div class="report-section">
+            <div class="report-num">1</div>
+            <div>
+              <strong style="font-size:.9rem">Datos cuantitativos</strong>
+              <p>Tablas con todos los scores, percentiles y niveles de los 5 instrumentos. Celdas con código de color: verde=Alto, amarillo=Medio, rojo=Bajo.</p>
+            </div>
+          </div>
+          <div class="report-section">
+            <div class="report-num">2</div>
+            <div>
+              <strong style="font-size:.9rem">Resultados cualitativos</strong>
+              <p>Narrativa detallada por dimensión: qué implica cada score en el contexto del liderazgo. Integra los 5 tests con coherencia teórica.</p>
+            </div>
+          </div>
+          <div class="report-section">
+            <div class="report-num">3</div>
+            <div>
+              <strong style="font-size:.9rem">Perfil integrado</strong>
+              <p>Síntesis que conecta personalidad (NEO) con conductas de liderazgo (CELID, CAMIN, CONLID) y motivación (POTENLID).</p>
+            </div>
+          </div>
+          <div class="report-section">
+            <div class="report-num">4</div>
+            <div>
+              <strong style="font-size:.9rem">Mapa de competencias (gráfico)</strong>
+              <p>Gráfico radar incrustado: evaluado (rojo) vs. líder situacional ideal (azul). Identifica brechas visualmente.</p>
+            </div>
+          </div>
+          <div class="report-section">
+            <div class="report-num">5</div>
+            <div>
+              <strong style="font-size:.9rem">Marco teórico y recomendaciones</strong>
+              <p>5 competencias de liderazgo con descripción teórica y plan de desarrollo personalizado basado en el perfil.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- SALIDAS -->
+<section id="salidas">
+  <div class="reveal">
+    <div class="section-label">Outputs</div>
+    <h2>¿Qué genera el sistema?</h2>
+    <p class="section-sub">Todos los archivos producidos por los 3 scripts Python.</p>
+    <div class="outputs-grid">
+      <div class="output-card">
+        <div class="output-icon">📄</div>
+        <h3>INFORME_LIDERAZGO.docx</h3>
+        <p>Informe Word profesional de 5 secciones (~2.1 MB). Hereda branding institucional del template.</p>
+      </div>
+      <div class="output-card">
+        <div class="output-icon">📊</div>
+        <h3>grafico_neo.png</h3>
+        <p>Perfil de personalidad Big Five. Barras horizontales con referencia T=50.</p>
+      </div>
+      <div class="output-card">
+        <div class="output-icon">📈</div>
+        <h3>grafico_celid.png</h3>
+        <p>Comparativo de estilos de liderazgo: Transformacional · Transaccional · Laissez-Faire.</p>
+      </div>
+      <div class="output-card">
+        <div class="output-icon">🕸️</div>
+        <h3>grafico_radar.png</h3>
+        <p>Mapa polar de 10 competencias: evaluado vs. ideal situacional para análisis de brechas.</p>
+      </div>
+      <div class="output-card">
+        <div class="output-icon">📝</div>
+        <h3>respuestas_evaluado.md</h3>
+        <p>Log completo de las 133 respuestas crudas para trazabilidad y auditoría.</p>
+      </div>
+      <div class="output-card">
+        <div class="output-icon">🗒️</div>
+        <h3>SESION_CONTINUIDAD.md</h3>
+        <p>Protocolo de sesión: metodología, resultados, inventario de archivos y pasos para reutilizar con otro evaluado.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- TECH -->
+<section id="tech">
+  <div class="reveal">
+    <div class="section-label">Tecnología</div>
+    <h2>Stack técnico</h2>
+    <p class="section-sub">Herramientas y dependencias del proyecto.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:2rem">
+      <div>
+        <h3 style="font-size:.95rem;margin-bottom:1rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-size:.75rem">Lenguaje & Runtime</h3>
+        <div class="tech-grid">
+          <div class="tech-pill"><span class="tech-dot" style="background:#3572A5"></span>Python 3.x</div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:.75rem;margin-bottom:1rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Librerías principales</h3>
+        <div class="tech-grid">
+          <div class="tech-pill"><span class="tech-dot" style="background:var(--green)"></span>openpyxl</div>
+          <div class="tech-pill"><span class="tech-dot" style="background:var(--primary-light)"></span>python-docx</div>
+          <div class="tech-pill"><span class="tech-dot" style="background:var(--orange)"></span>matplotlib</div>
+          <div class="tech-pill"><span class="tech-dot" style="background:var(--purple)"></span>lxml</div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:.75rem;margin-bottom:1rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Formatos de datos</h3>
+        <div class="tech-grid">
+          <div class="tech-pill">.xlsx / .xlsm</div>
+          <div class="tech-pill">.docx</div>
+          <div class="tech-pill">.png (150 DPI)</div>
+          <div class="tech-pill">.md</div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:.75rem;margin-bottom:1rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Scripts</h3>
+        <div class="tech-grid">
+          <div class="tech-pill">corregir.py</div>
+          <div class="tech-pill">graficos.py</div>
+          <div class="tech-pill">generar_informe.py</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:3rem">
+      <h3 style="font-size:.95rem;margin-bottom:1rem">Archivos clave</h3>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+          <thead>
+            <tr style="background:var(--bg3)">
+              <th style="padding:.75rem 1rem;text-align:left;color:var(--text-muted);font-weight:600">Archivo</th>
+              <th style="padding:.75rem 1rem;text-align:left;color:var(--text-muted);font-weight:600">Propósito</th>
+              <th style="padding:.75rem 1rem;text-align:left;color:var(--text-muted);font-weight:600">Tamaño</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:.7rem 1rem;font-family:monospace;color:var(--primary-light)">corregir.py</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">Motor de corrección — claves, baremos, T-scores</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">6.2 KB</td>
+            </tr>
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:.7rem 1rem;font-family:monospace;color:var(--primary-light)">graficos.py</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">Generación de gráficos matplotlib</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">4.0 KB</td>
+            </tr>
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:.7rem 1rem;font-family:monospace;color:var(--primary-light)">generar_informe.py</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">Constructor del informe Word — 5 secciones</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">25.3 KB</td>
+            </tr>
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:.7rem 1rem;font-family:monospace;color:var(--orange)">MODELO_DE_INFORME_1.docx</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">Template institucional (estilos, branding)</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">1.9 MB</td>
+            </tr>
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:.7rem 1rem;font-family:monospace;color:var(--accent2)">Analisis Neo y SCL 90.xlsm</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">Tabla baremo NEO (Casullo & Pérez 2008)</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">96 KB</td>
+            </tr>
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:.7rem 1rem;font-family:monospace;color:var(--accent2)">Correccion, CELID A *.xlsx</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">Baremos percentilares de los 4 tests restantes</td>
+              <td style="padding:.7rem 1rem;color:var(--text-muted)">~14 KB c/u</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- INSTRUCCIONES -->
+<section>
+  <div class="reveal">
+    <div class="section-label">Uso</div>
+    <h2>Cómo evaluar a un nuevo líder</h2>
+    <p class="section-sub">3 pasos para reproducir el proceso con cualquier evaluado.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:1.5rem">
+        <div style="font-size:2rem;margin-bottom:.8rem">1️⃣</div>
+        <h3 style="margin-bottom:.5rem">Cargar respuestas</h3>
+        <p style="font-size:.85rem;color:var(--text-muted)">Editar los diccionarios en <code style="color:var(--primary-light)">corregir.py</code> con las respuestas del nuevo evaluado. NEO (60 letras a–e), más 73 valores numéricos de los otros 4 tests.</p>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:1.5rem">
+        <div style="font-size:2rem;margin-bottom:.8rem">2️⃣</div>
+        <h3 style="margin-bottom:.5rem">Ejecutar el pipeline</h3>
+        <div class="code-block" style="margin-top:.5rem">
+python3 corregir.py<br>
+python3 graficos.py<br>
+python3 generar_informe.py
+        </div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:1.5rem">
+        <div style="font-size:2rem;margin-bottom:.8rem">3️⃣</div>
+        <h3 style="margin-bottom:.5rem">Recibir entregables</h3>
+        <p style="font-size:.85rem;color:var(--text-muted)">En la misma carpeta aparecen <code style="color:var(--primary-light)">INFORME_LIDERAZGO.docx</code> y los 3 gráficos PNG, listos para compartir o imprimir.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>FRAN — Sistema de Perfilamiento de Liderazgo &nbsp;·&nbsp; Python · openpyxl · python-docx · matplotlib</p>
+  <p style="margin-top:.3rem;font-size:.75rem">NEO-FFI (Costa & McCrae, 1992) · CELID-A (Bass & Avolio) · CAMIN-A (House, 1971) · Normas: Casullo & Pérez 2008</p>
+</footer>
+
+<script>
+// ── Pipeline steps ──
+document.querySelectorAll('.pipe-step').forEach(step => {
+  step.addEventListener('click', () => {
+    document.querySelectorAll('.pipe-step').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.pipe-detail').forEach(d => d.classList.remove('visible'));
+    step.classList.add('active');
+    document.getElementById('detail-' + step.dataset.step).classList.add('visible');
+  });
+});
+
+// ── Instrument accordion ──
+function toggleInstr(header) {
+  const body = header.nextElementSibling;
+  const isOpen = body.classList.contains('open');
+  document.querySelectorAll('.instrument-body').forEach(b => b.classList.remove('open'));
+  document.querySelectorAll('.instrument-header').forEach(h => h.classList.remove('open'));
+  if (!isOpen) { body.classList.add('open'); header.classList.add('open'); }
+}
+
+// ── Demo tabs ──
+function switchTab(btn, paneId) {
+  document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.demo-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(paneId).classList.add('active');
+  if (paneId === 'tab-radar') drawRadar();
+  if (paneId === 'tab-neo') animateBars();
+  if (paneId === 'tab-celid') animateCelid();
+}
+
+// ── Scroll reveal ──
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── NEO bars animation ──
+function animateBars() {
+  document.querySelectorAll('.t-bar-fill').forEach(bar => {
+    const target = parseFloat(bar.dataset.target);
+    setTimeout(() => { bar.style.width = target + '%'; }, 100);
+  });
+}
+setTimeout(animateBars, 400);
+
+// ── CELID bars ──
+function animateCelid() {
+  document.querySelectorAll('.celid-bar').forEach(bar => {
+    const target = parseFloat(bar.dataset.target);
+    setTimeout(() => { bar.style.width = target + '%'; }, 100);
+  });
+}
+
+// ── Radar chart ──
+function drawRadar() {
+  const canvas = document.getElementById('radarCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+  const R = Math.min(W, H) * 0.37;
+
+  const labels = [
+    'Extraversión','Apertura','Transformacional','Participativo','Motivación',
+    'Cambio','Consideración','Orientado a metas','Responsabilidad','Amabilidad'
+  ];
+
+  const evaluated = [0.80, 0.80, 0.86, 0.90, 0.85, 0.80, 0.75, 0.75, 0.66, 0.46];
+  const ideal     = [0.75, 0.75, 0.90, 0.85, 0.80, 0.80, 0.85, 0.80, 0.75, 0.75];
+
+  const n = labels.length;
+  const angleStep = (2 * Math.PI) / n;
+  const startAngle = -Math.PI / 2;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid rings
+  for (let r = 1; r <= 5; r++) {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = startAngle + i * angleStep;
+      const x = cx + Math.cos(a) * R * (r / 5);
+      const y = cy + Math.sin(a) * R * (r / 5);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(48,54,61,0.8)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Spokes
+  for (let i = 0; i < n; i++) {
+    const a = startAngle + i * angleStep;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+    ctx.strokeStyle = 'rgba(48,54,61,0.6)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Draw polygon
+  function drawPoly(values, color, fill) {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = startAngle + i * angleStep;
+      const x = cx + Math.cos(a) * R * values[i];
+      const y = cy + Math.sin(a) * R * values[i];
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Dots
+    for (let i = 0; i < n; i++) {
+      const a = startAngle + i * angleStep;
+      const x = cx + Math.cos(a) * R * values[i];
+      const y = cy + Math.sin(a) * R * values[i];
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  }
+
+  drawPoly(ideal, '#4a7bc4', 'rgba(74,123,196,0.15)');
+  drawPoly(evaluated, '#e63946', 'rgba(230,57,70,0.12)');
+
+  // Labels
+  ctx.font = '11px Segoe UI, system-ui, sans-serif';
+  ctx.fillStyle = '#8b949e';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < n; i++) {
+    const a = startAngle + i * angleStep;
+    const labelR = R + 28;
+    const x = cx + Math.cos(a) * labelR;
+    const y = cy + Math.sin(a) * labelR;
+    ctx.fillText(labels[i], x, y);
+  }
+}
+
+// Trigger radar on load if visible
+if (document.getElementById('tab-radar') && document.getElementById('tab-radar').classList.contains('active')) drawRadar();
+</script>
+</body>
+</html>

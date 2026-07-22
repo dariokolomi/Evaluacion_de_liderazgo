@@ -1,0 +1,13 @@
+[
+  {
+    "run_id": "ae0a3dba",
+    "timestamp": "2026-04-22T17:49:31.168987",
+    "xlsx": "Planilla de Preguntas - FM 1.xlsx",
+    "modelo": "MODELO DE INFORME 2.docx",
+    "evaluado": "Prueba",
+    "output": "INFORME_Prueba_20260422_174929.docx",
+    "elapsed": 1.1,
+    "rating": null,
+    "comment": ""
+  }
+]
