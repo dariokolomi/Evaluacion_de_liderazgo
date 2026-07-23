@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 
 const RAIZ = path.resolve(__dirname, '..');
-const ARCHIVOS_GS = ['Acceso.gs', 'Configuracion.gs', 'Historial.gs', 'Informe.gs', 'WebApp.gs'];
+const ARCHIVOS_GS = ['Acceso.gs', 'Configuracion.gs', 'Historial.gs', 'Metricas.gs', 'Informe.gs', 'WebApp.gs'];
 
 const GRUPO = 'informes-rrhh@kolektor.com.ar';
 const USUARIO = 'ana.perez@kolektor.com.ar';
@@ -114,7 +114,7 @@ function cargarGs(globales) {
   const nombres = Object.keys(globales);
   return new Function(
     ...nombres,
-    `${fuente}\nreturn { doGet, listarPlanillas, listarHistorial, calificarInforme, escaparHtml };`
+    `${fuente}\nreturn { doGet, listarPlanillas, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml };`
   )(...nombres.map((n) => globales[n]));
 }
 
@@ -187,6 +187,14 @@ function main() {
     !historial.error && historial.valor[0].fila === 3 && historial.valor[1].fila === 2);
   revisar('listarHistorial exige acceso por su cuenta',
     !!intentar(() => gsSinAcceso.listarHistorial()).error);
+
+  // ── obtenerMetricas ──
+  const metricas = intentar(() => gsCorridas.obtenerMetricas());
+  revisar('las métricas salen del historial completo',
+    !metricas.error && metricas.valor.total === 2 && metricas.valor.calificados === 1,
+    metricas.error ? metricas.error.message : JSON.stringify(metricas.valor).slice(0, 80));
+  revisar('obtenerMetricas exige acceso por su cuenta',
+    !!intentar(() => gsSinAcceso.obtenerMetricas()).error);
 
   // ── calificarInforme ──
   const calificar = intentar(() => gsCorridas.calificarInforme(2, 4, 'correcto'));

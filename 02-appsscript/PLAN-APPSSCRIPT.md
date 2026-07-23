@@ -161,9 +161,11 @@ Datos usados en la comparación:
 - [x] UI con `HtmlService` → `WebApp.gs` + `Interfaz.html`. Sin SSE: la corrida
       tarda segundos y Apps Script no permite streaming, así que la barra de
       progreso por etapas se cambia por un spinner.
-      **Falta portar el tablero de métricas** (KPIs y 4 gráficos de
-      `templates/index.html`): se alimenta de calificaciones acumuladas, que en
-      el sistema nuevo todavía no existen. Se decide cuando haya datos.
+- [x] Tablero de métricas → `Metricas.gs` + pestaña en la interfaz. Gráficos en
+      SVG dibujados a mano: el tablero actual usa Chart.js y Bootstrap desde
+      CDN, y acá no hace falta la dependencia.
+      "Calidad por modelo" no se porta —desapareció el archivo modelo— y se
+      reemplaza por la distribución de calificaciones, que responde lo mismo.
 - [ ] **Probar el proyecto de verdad en Apps Script** con una planilla real:
       todo lo anterior está verificado en Node contra servicios simulados, que
       no prueban que la API real se comporte como el simulacro.

@@ -14,7 +14,11 @@ node verificar-documento.js     # Documento.gs contra los informes de Python
 node verificar-radar.js         # Radar.gs: serie graficada y armado del gráfico
 node verificar-orquestador.js   # Informe.gs: flujo completo contra Drive simulado
 node verificar-webapp.js        # WebApp.gs: acceso, listados y calificaciones
+node verificar-metricas.js      # Metricas.gs: los números del tablero
 ```
+
+Los cuatro verificadores de la app (`orquestador`, `webapp`, `metricas` y
+`radar`) no necesitan volcados de Python: corren sin haber ejecutado nada antes.
 
 Para una corrida más exigente: `python3 dump-referencia.py --fuzz 2000`.
 

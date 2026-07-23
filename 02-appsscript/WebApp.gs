@@ -15,6 +15,7 @@
  */
 
 var TITULO = 'Informes de Liderazgo — CCHH';
+var LIMITE_HISTORIAL_COMPLETO = 5000;
 
 function doGet() {
   var config;
@@ -100,6 +101,16 @@ function listarHistorial(limite) {
       comentario: corrida.comentario
     };
   });
+}
+
+/**
+ * Métricas del tablero. Lee todo el historial, no las últimas 25: un promedio
+ * sobre una ventana móvil no es el promedio.
+ */
+function obtenerMetricas() {
+  var config = configuracion();
+  exigirAcceso(config.grupoAutorizado);
+  return metricasDe(leerCorridas(config.historialId, LIMITE_HISTORIAL_COMPLETO));
 }
 
 function calificarInforme(fila, calificacion, comentario) {
