@@ -1,4 +1,4 @@
-# Al proyecto de Apps Script sólo suben los .gs y el manifiesto.
+# Al proyecto de Apps Script suben los .gs, la interfaz .html y el manifiesto.
 # Los tests son .js y corren en Node contra servicios simulados: no tienen
 # nada que hacer allá arriba, y clasp los subiría por ser .js.
 tests/**
