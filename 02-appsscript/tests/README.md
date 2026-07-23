@@ -6,7 +6,9 @@ exactamente lo mismo que el motor Python en producción.
 
 ```bash
 python3 dump-referencia.py      # planillas reales + bordes + 500 sintéticas
-node verificar-port.js          # compara Correccion.gs contra esa referencia
+python3 dump-celdas.py          # celdas crudas de las planillas reales
+node verificar-port.js          # Correccion.gs contra la referencia
+node verificar-lectura.js       # Lectura.gs contra la referencia, y punta a punta
 ```
 
 Para una corrida más exigente: `python3 dump-referencia.py --fuzz 2000`.
@@ -32,12 +34,28 @@ Por eso hay tres fuentes de casos:
 
 La semilla del azar es fija: un fallo se reproduce corriendo lo mismo otra vez.
 
+`verificar-lectura.js` compara las respuestas que extrae `Lectura.gs` de las
+celdas crudas contra las que leyó Python, y después las corrige para comprobar
+que la cadena entera da lo mismo. Cierra con casos construidos a mano —celdas
+basura, encabezados que se parecen a ítems, hojas vacías— que ninguna planilla
+real tiene.
+
 ## Salvedades
 
-- `referencia-python.json` está en `.gitignore`: pesa ~9 MB y contiene las
-  respuestas crudas de personas evaluadas reales. Se regenera cuando hace falta.
-- `Planilla de Preguntas (1).xlsx` no se procesa: es el formulario en blanco,
-  sin respuestas cargadas. El motor Python también falla con ella (`KeyError: 1`).
+- `referencia-python.json` y `celdas-python.json` están en `.gitignore`:
+  contienen las respuestas crudas de personas evaluadas reales. Se regeneran.
+- `Planilla de Preguntas (1).xlsx` es el formulario en blanco, sin respuestas.
+  El motor Python explota con ella (`KeyError: 1`); la lectura nueva la rechaza
+  diciendo qué le falta. Es la única diferencia buscada respecto de Python.
+
+## Dónde la lectura no es un calco de Python
+
+Dos casos donde `Lectura.gs` no puede replicar a openpyxl, y qué se hizo:
+
+| Caso | Python | Apps Script |
+|---|---|---|
+| Número de ítem `1.0` en vez de `1` | `isinstance(row[0], int)` lo descarta | Sheets no distingue entero de decimal; se acepta todo número sin parte decimal |
+| Celda de NEO con algo que no es A–E | La toma igual y después falla al puntuar | Se cuenta como ítem sin responder, para no producir un puntaje sin sentido |
 - Algunas filas de los baremos son inalcanzables por construcción — cortes
   repetidos entre percentiles contiguos (Carisma P95 y P90 comparten el corte
   4,75) o cortes que ninguna media puede alcanzar (Consideración Individualizada
