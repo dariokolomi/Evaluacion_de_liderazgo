@@ -91,7 +91,29 @@ class Imagen {
 }
 
 class Body {
-  constructor() { this.bloques = []; }
+  constructor(conParrafoInicial) {
+    this.bloques = [];
+    if (conParrafoInicial) this.appendParagraph('');
+  }
+  /** Como en Docs: vaciar el cuerpo deja un párrafo vacío, no cero elementos. */
+  clear() {
+    this.bloques = [new Parrafo()];
+    return this;
+  }
+  getNumChildren() { return this.bloques.length; }
+  getChild(indice) {
+    const bloque = this.bloques[indice];
+    const body = this;
+    const quitar = () => { body.bloques.splice(body.bloques.indexOf(bloque), 1); };
+    return {
+      getType: () => (bloque.tipo === 'parrafo' ? 'PARAGRAPH' : bloque.tipo.toUpperCase()),
+      removeFromParent: quitar,
+      asParagraph: () => ({
+        getText: () => (bloque.tramos || []).map((t) => t.texto).join(''),
+        removeFromParent: quitar,
+      }),
+    };
+  }
   appendParagraph() {
     const p = new Parrafo();
     this.bloques.push(p);
@@ -117,6 +139,7 @@ class Body {
 
 const DocumentApp = {
   HorizontalAlignment: { CENTER: 'CENTER', LEFT: 'LEFT', RIGHT: 'RIGHT', JUSTIFY: 'JUSTIFY' },
+  ElementType: { PARAGRAPH: 'PARAGRAPH', TABLE: 'TABLE', INLINE_IMAGE: 'INLINE_IMAGE' },
 };
 
 /** Deja la estructura en el mismo formato que produce dump-docx.py. */

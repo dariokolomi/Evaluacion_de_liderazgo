@@ -151,9 +151,17 @@ Datos usados en la comparación:
       Verificado que la serie y las etiquetas graficadas son idénticas a las de
       matplotlib en 307 perfiles, y que la planilla temporal se descarta siempre.
       Lo visual no se verifica con tests: ya se comparó a ojo y está aprobado.
-- [ ] Historial + calificaciones en Sheet.
+- [x] Historial + calificaciones en Sheet → `Historial.gs`. Mismas columnas que
+      el Excel de calidad actual, menos "Modelo": ya no hay modelo que elegir.
+- [x] Orquestador → `Informe.gs`: planilla → informe .docx en la Unidad
+      compartida + registro en el historial. Descarta siempre lo intermedio.
+      Configuración externa en `Configuracion.gs` (nada de IDs hardcodeados).
+- [x] Restricción de acceso por `GroupsApp` → `Acceso.gs`. Se verifica dentro de
+      la operación, no sólo en `doGet`.
 - [ ] UI con `HtmlService` (adaptar `templates/index.html`, quitar SSE).
-- [ ] Restricción de acceso por `GroupsApp` en `doGet`.
+- [ ] **Probar el proyecto de verdad en Apps Script** con una planilla real:
+      todo lo anterior está verificado en Node contra servicios simulados, que
+      no prueban que la API real se comporte como el simulacro.
 
 ---
 
