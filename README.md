@@ -24,9 +24,11 @@ reinterpretan.**
 01-legacy-python/     App Flask actual, en funcionamiento
 ├── app.py            Servidor web y API
 ├── run_engine.py     Motor: corrección + gráfico radar + armado del .docx
-├── templates/        UI
+├── templates/        UI que sirve Flask
+├── documentacion.html      Página de presentación del sistema (autocontenida, no la sirve Flask)
 ├── salidas/          Informes generados y gráficos
 ├── scripts-previos/  Flujo original de scripts sueltos (superado por run_engine)
+│   └── SESION_CONTINUIDAD.md   Registro de la corrida manual de abril 2026
 └── distribucion-windows/   Copia autocontenida con .bat para PC sin entorno
 
 02-appsscript/        Migración a Google Workspace (en planificación)
