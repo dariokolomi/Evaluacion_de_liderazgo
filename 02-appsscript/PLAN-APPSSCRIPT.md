@@ -112,10 +112,12 @@ Datos usados en la comparación:
 
 ## 5. Pasos pendientes
 
-### Bloqueante antes de empezar
-- [ ] **Confirmar que el dominio permite crear proyectos de Apps Script.**
-      Algunas organizaciones lo restringen por política de admin. Si está bloqueado,
-      toda esta opción se cae y hay que volver a evaluar.
+### Bloqueante — RESUELTO
+- [x] **Confirmar que el dominio permite crear proyectos de Apps Script.**
+      Confirmado por el usuario el 2026-07-23: el dominio lo permite.
+      Con esto, la arquitectura elegida queda firme y el port puede arrancar.
+
+### Antes de publicar la app (no bloquean el port del motor)
 - [ ] Definir el nombre del Grupo de Google y crearlo si no existe.
 - [ ] Crear la Unidad compartida de Drive para los informes.
 
