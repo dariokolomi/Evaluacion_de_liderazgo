@@ -97,6 +97,33 @@
     dialog { border: 1px solid var(--borde); border-radius: 8px; padding: 1.5rem; max-width: 26rem; width: 90%; }
     dialog h3 { margin: 0 0 1rem; color: var(--cchh); font-size: 1rem; }
     dialog .acciones { justify-content: flex-end; }
+
+    nav.pestanias { display: flex; gap: .3rem; margin-bottom: 1.25rem; }
+    nav.pestanias button {
+      background: transparent;
+      color: var(--cchh);
+      border: 1px solid var(--borde);
+      border-radius: 6px 6px 0 0;
+      padding: .5rem 1.1rem;
+      font-size: .9rem;
+    }
+    nav.pestanias button[aria-selected="true"] { background: var(--cchh); color: #fff; border-color: var(--cchh); }
+
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+    @media (max-width: 46rem) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+    .kpi { background: var(--cchh-fondo); border-radius: 8px; padding: .9rem 1rem; }
+    .kpi .valor { font-size: 1.6rem; font-weight: 700; color: var(--cchh); line-height: 1.2; }
+    .kpi .rotulo { font-size: .78rem; color: #5a6b7d; }
+    .graficos { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 46rem) { .graficos { grid-template-columns: 1fr; } }
+    .grafico h3 { margin: 0 0 .6rem; font-size: .85rem; color: #5a6b7d; font-weight: 600; }
+    .grafico svg { width: 100%; height: auto; display: block; }
+    .barra { fill: var(--cchh-claro); }
+    .barra:hover { fill: var(--acento); }
+    .linea { fill: none; stroke: var(--acento); stroke-width: 2; }
+    .punto { fill: var(--acento); }
+    .eje { stroke: var(--borde); stroke-width: 1; }
+    .rotulo-eje { font-size: 9px; fill: #7b8794; }
   </style>
 </head>
 <body>
@@ -106,6 +133,12 @@
   </header>
 
   <main>
+    <nav class="pestanias" role="tablist">
+      <button id="tab-informes" role="tab" aria-selected="true">Informes</button>
+      <button id="tab-metricas" role="tab" aria-selected="false">Métricas</button>
+    </nav>
+
+    <div id="vista-informes">
     <section>
       <h2>Generar un informe</h2>
       <div class="campos">
@@ -142,6 +175,51 @@
         </tbody>
       </table>
     </section>
+    </div>
+
+    <div id="vista-metricas" class="oculto">
+      <div id="alerta-calidad"></div>
+
+      <section>
+        <h2>Resumen</h2>
+        <div class="kpis">
+          <div class="kpi"><div class="valor" id="kpi-total">—</div><div class="rotulo">informes generados</div></div>
+          <div class="kpi"><div class="valor" id="kpi-calificacion">—</div><div class="rotulo">calificación promedio</div></div>
+          <div class="kpi"><div class="valor" id="kpi-tiempo">—</div><div class="rotulo">segundos por informe</div></div>
+          <div class="kpi"><div class="valor" id="kpi-calificados">—</div><div class="rotulo">calificados</div></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Actividad y calidad</h2>
+        <div class="graficos">
+          <div class="grafico">
+            <h3>Informes por día</h3>
+            <div id="grafico-fechas"></div>
+          </div>
+          <div class="grafico">
+            <h3>Distribución de calificaciones</h3>
+            <div id="grafico-distribucion"></div>
+          </div>
+          <div class="grafico">
+            <h3>Tendencia de la calificación</h3>
+            <div id="grafico-tendencia"></div>
+          </div>
+          <div class="grafico">
+            <h3>Tiempo de generación (segundos)</h3>
+            <div id="grafico-tiempos"></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Calificación por persona evaluada</h2>
+        <table>
+          <thead><tr><th>Evaluado</th><th>Promedio</th><th>Informes calificados</th></tr></thead>
+          <tbody id="por-evaluado"><tr><td colspan="3" class="vacio">Cargando…</td></tr></tbody>
+        </table>
+      </section>
+    </div>
   </main>
 
   <dialog id="dialogo">
@@ -316,6 +394,162 @@
         })
         .calificarInforme(filaACalificar, $('puntaje').value, $('comentario').value);
     });
+
+    // ── Métricas ──────────────────────────────────────────────────
+    const SVG = 'http://www.w3.org/2000/svg';
+    const ANCHO = 320, ALTO = 130, MARGEN = { arriba: 8, abajo: 18, izq: 22, der: 6 };
+
+    function nodo(nombre, atributos) {
+      const n = document.createElementNS(SVG, nombre);
+      Object.entries(atributos || {}).forEach(([k, v]) => n.setAttribute(k, v));
+      return n;
+    }
+
+    function lienzo(contenedor) {
+      const s = nodo('svg', { viewBox: `0 0 ${ANCHO} ${ALTO}`, role: 'img' });
+      contenedor.replaceChildren(s);
+      return s;
+    }
+
+    function sinDatos(contenedor, mensaje) {
+      const p = document.createElement('p');
+      p.className = 'vacio';
+      p.style.fontSize = '.85rem';
+      p.textContent = mensaje;
+      contenedor.replaceChildren(p);
+    }
+
+    /** Barras verticales. valores: [{rotulo, valor}] */
+    function graficoDeBarras(contenedor, valores) {
+      if (!valores.length) return sinDatos(contenedor, 'Todavía no hay datos.');
+      const s = lienzo(contenedor);
+      const util = { ancho: ANCHO - MARGEN.izq - MARGEN.der, alto: ALTO - MARGEN.arriba - MARGEN.abajo };
+      const maximo = Math.max(...valores.map((v) => v.valor), 1);
+      const paso = util.ancho / valores.length;
+
+      s.appendChild(nodo('line', {
+        x1: MARGEN.izq, y1: MARGEN.arriba + util.alto, x2: ANCHO - MARGEN.der,
+        y2: MARGEN.arriba + util.alto, class: 'eje',
+      }));
+      s.appendChild(nodo('text', { x: 2, y: MARGEN.arriba + 8, class: 'rotulo-eje' })).textContent = maximo;
+
+      valores.forEach((v, i) => {
+        const alto = (v.valor / maximo) * util.alto;
+        const barra = nodo('rect', {
+          x: MARGEN.izq + i * paso + paso * 0.15,
+          y: MARGEN.arriba + util.alto - alto,
+          width: paso * 0.7,
+          height: alto,
+          class: 'barra',
+          rx: 1,
+        });
+        barra.appendChild(nodo('title')).textContent = `${v.rotulo}: ${v.valor}`;
+        s.appendChild(barra);
+        if (valores.length <= 8 || i % Math.ceil(valores.length / 6) === 0) {
+          const t = nodo('text', {
+            x: MARGEN.izq + i * paso + paso / 2, y: ALTO - 5,
+            class: 'rotulo-eje', 'text-anchor': 'middle',
+          });
+          t.textContent = v.rotulo;
+          s.appendChild(t);
+        }
+      });
+    }
+
+    /** Línea con puntos. valores: [{rotulo, valor}] */
+    function graficoDeLinea(contenedor, valores, minimo, maximo) {
+      if (!valores.length) return sinDatos(contenedor, 'Todavía no hay datos.');
+      const s = lienzo(contenedor);
+      const util = { ancho: ANCHO - MARGEN.izq - MARGEN.der, alto: ALTO - MARGEN.arriba - MARGEN.abajo };
+      const tope = maximo !== undefined ? maximo : Math.max(...valores.map((v) => v.valor), 1);
+      const piso = minimo !== undefined ? minimo : 0;
+      const rango = tope - piso || 1;
+      const x = (i) => MARGEN.izq + (valores.length === 1 ? util.ancho / 2 : (i / (valores.length - 1)) * util.ancho);
+      const y = (v) => MARGEN.arriba + util.alto - ((v - piso) / rango) * util.alto;
+
+      s.appendChild(nodo('line', {
+        x1: MARGEN.izq, y1: MARGEN.arriba + util.alto, x2: ANCHO - MARGEN.der,
+        y2: MARGEN.arriba + util.alto, class: 'eje',
+      }));
+      s.appendChild(nodo('text', { x: 2, y: MARGEN.arriba + 8, class: 'rotulo-eje' })).textContent = tope;
+      s.appendChild(nodo('text', { x: 2, y: MARGEN.arriba + util.alto, class: 'rotulo-eje' })).textContent = piso;
+
+      s.appendChild(nodo('polyline', {
+        class: 'linea',
+        points: valores.map((v, i) => `${x(i)},${y(v.valor)}`).join(' '),
+      }));
+      valores.forEach((v, i) => {
+        const punto = nodo('circle', { cx: x(i), cy: y(v.valor), r: 2.5, class: 'punto' });
+        punto.appendChild(nodo('title')).textContent = `${v.rotulo}: ${v.valor}`;
+        s.appendChild(punto);
+      });
+    }
+
+    function diaYMes(fecha) {
+      const partes = String(fecha).split('-');
+      return partes.length === 3 ? `${partes[2]}/${partes[1]}` : String(fecha);
+    }
+
+    function dibujarMetricas(m) {
+      $('kpi-total').textContent = m.total;
+      $('kpi-calificacion').textContent = m.promedioCalificacion || '—';
+      $('kpi-tiempo').textContent = m.promedioSegundos || '—';
+      $('kpi-calificados').textContent = m.porcentajeCalificado + '%';
+
+      const alerta = $('alerta-calidad');
+      if (m.alerta) {
+        const aviso = document.createElement('div');
+        aviso.className = 'aviso error';
+        aviso.style.marginBottom = '1.25rem';
+        aviso.textContent = 'Las últimas calificaciones vienen por debajo de 3. Conviene revisar los informes recientes.';
+        alerta.replaceChildren(aviso);
+      } else {
+        alerta.replaceChildren();
+      }
+
+      graficoDeBarras($('grafico-fechas'),
+        m.porFecha.map((f) => ({ rotulo: diaYMes(f.fecha), valor: f.cantidad })));
+      graficoDeBarras($('grafico-distribucion'),
+        m.distribucion.map((d) => ({ rotulo: d.puntaje + '★', valor: d.cantidad })));
+      graficoDeLinea($('grafico-tendencia'),
+        m.tendencia.map((t) => ({ rotulo: `${t.evaluado} (${diaYMes(t.fecha)})`, valor: t.calificacion })), 0, 5);
+      graficoDeLinea($('grafico-tiempos'),
+        m.tiempos.map((s, i) => ({ rotulo: 'corrida ' + (i + 1), valor: s })));
+
+      const cuerpo = $('por-evaluado');
+      if (!m.porEvaluado.length) {
+        cuerpo.replaceChildren(fila(['Todavía no hay informes calificados'], 'vacio', 3));
+        return;
+      }
+      cuerpo.replaceChildren(...m.porEvaluado.map((e) => {
+        const tr = document.createElement('tr');
+        [e.evaluado, e.promedio, e.cantidad].forEach((valor) => {
+          const td = document.createElement('td');
+          td.textContent = valor;
+          tr.appendChild(td);
+        });
+        return tr;
+      }));
+    }
+
+    function cargarMetricas() {
+      google.script.run
+        .withSuccessHandler(dibujarMetricas)
+        .withFailureHandler((e) => sinDatos($('grafico-fechas'), e.message))
+        .obtenerMetricas();
+    }
+
+    function mostrarVista(cual) {
+      const esMetricas = cual === 'metricas';
+      $('vista-informes').classList.toggle('oculto', esMetricas);
+      $('vista-metricas').classList.toggle('oculto', !esMetricas);
+      $('tab-informes').setAttribute('aria-selected', String(!esMetricas));
+      $('tab-metricas').setAttribute('aria-selected', String(esMetricas));
+      if (esMetricas) cargarMetricas();
+    }
+
+    $('tab-informes').addEventListener('click', () => mostrarVista('informes'));
+    $('tab-metricas').addEventListener('click', () => mostrarVista('metricas'));
 
     cargarPlanillas();
     cargarHistorial();
