@@ -37,6 +37,7 @@ function crearEntorno(grillas, escenario) {
 
   const propiedades = e.sinConfigurar ? {} : {
     CARPETA_INFORMES_ID: CARPETA_INFORMES,
+    CARPETA_PLANILLAS_ID: 'carpeta-planillas-id',
     HISTORIAL_SHEET_ID: HISTORIAL,
     GRUPO_AUTORIZADO: GRUPO,
   };

@@ -13,6 +13,7 @@ node verificar-lectura.js       # Lectura.gs contra la referencia, y punta a pun
 node verificar-documento.js     # Documento.gs contra los informes de Python
 node verificar-radar.js         # Radar.gs: serie graficada y armado del gráfico
 node verificar-orquestador.js   # Informe.gs: flujo completo contra Drive simulado
+node verificar-webapp.js        # WebApp.gs: acceso, listados y calificaciones
 ```
 
 Para una corrida más exigente: `python3 dump-referencia.py --fuzz 2000`.

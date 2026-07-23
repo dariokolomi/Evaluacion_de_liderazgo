@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <base target="_top">
+  <style>
+    :root {
+      --cchh: #2E5496;
+      --cchh-claro: #4472C4;
+      --cchh-fondo: #EBF0FA;
+      --acento: #FF6600;
+      --texto: #2b3a4a;
+      --borde: #d7dfeb;
+      --ok: #E2EFDA;
+      --error: #FCE4D6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--texto);
+      background: var(--cchh-fondo);
+      line-height: 1.5;
+    }
+    header {
+      background: var(--cchh);
+      color: #fff;
+      padding: 1.1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: .5rem;
+    }
+    header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+    header .usuario { font-size: .85rem; opacity: .85; }
+    main { max-width: 60rem; margin: 0 auto; padding: 1.5rem; }
+    section {
+      background: #fff;
+      border: 1px solid var(--borde);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    h2 { margin: 0 0 1rem; font-size: 1rem; color: var(--cchh); }
+    label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: .3rem; }
+    select, input[type="text"], textarea {
+      width: 100%;
+      padding: .55rem .7rem;
+      border: 1px solid var(--borde);
+      border-radius: 6px;
+      font: inherit;
+      background: #fff;
+    }
+    .campos { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 40rem) { .campos { grid-template-columns: 1fr; } }
+    .acciones { margin-top: 1.1rem; display: flex; align-items: center; gap: 1rem; }
+    button {
+      background: var(--cchh);
+      color: #fff;
+      border: 0;
+      border-radius: 6px;
+      padding: .6rem 1.2rem;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: var(--cchh-claro); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.secundario { background: transparent; color: var(--cchh); border: 1px solid var(--borde); }
+    .spinner {
+      width: 1.1rem; height: 1.1rem;
+      border: 2px solid var(--borde);
+      border-top-color: var(--acento);
+      border-radius: 50%;
+      animation: girar .8s linear infinite;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    .aviso { padding: .8rem 1rem; border-radius: 6px; margin-top: 1rem; font-size: .9rem; }
+    .aviso.ok { background: var(--ok); }
+    .aviso.error { background: var(--error); }
+    .aviso a { color: var(--cchh); font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th {
+      text-align: left;
+      background: var(--cchh);
+      color: #fff;
+      font-weight: 600;
+      padding: .5rem .6rem;
+      font-size: .8rem;
+    }
+    td { padding: .5rem .6rem; border-bottom: 1px solid var(--borde); vertical-align: middle; }
+    tr:hover td { background: #fafbfe; }
+    .estrellas { color: var(--acento); letter-spacing: .1em; white-space: nowrap; }
+    .vacio { color: #7b8794; font-style: italic; }
+    .oculto { display: none; }
+    dialog { border: 1px solid var(--borde); border-radius: 8px; padding: 1.5rem; max-width: 26rem; width: 90%; }
+    dialog h3 { margin: 0 0 1rem; color: var(--cchh); font-size: 1rem; }
+    dialog .acciones { justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Informes de Liderazgo</h1>
+    <span class="usuario"><?= usuario ?></span>
+  </header>
+
+  <main>
+    <section>
+      <h2>Generar un informe</h2>
+      <div class="campos">
+        <div>
+          <label for="planilla">Planilla de respuestas</label>
+          <select id="planilla"><option value="">Cargando…</option></select>
+        </div>
+        <div>
+          <label for="evaluado">Persona evaluada</label>
+          <input type="text" id="evaluado" placeholder="Nombre y apellido" autocomplete="off">
+        </div>
+      </div>
+      <div class="acciones">
+        <button id="generar" disabled>Generar informe</button>
+        <div id="cargando" class="oculto" style="display:flex;align-items:center;gap:.6rem">
+          <div class="spinner"></div>
+          <span style="font-size:.9rem">Corrigiendo y armando el informe…</span>
+        </div>
+      </div>
+      <div id="resultado"></div>
+    </section>
+
+    <section>
+      <h2>Últimos informes</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Evaluado</th><th>Informe</th>
+            <th>Generado por</th><th>Calificación</th>
+          </tr>
+        </thead>
+        <tbody id="historial">
+          <tr><td colspan="5" class="vacio">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <dialog id="dialogo">
+    <h3>Calificar el informe</h3>
+    <label for="puntaje">¿Qué tan bueno salió? (1 a 5)</label>
+    <select id="puntaje">
+      <option value="5">5 — Muy bueno</option>
+      <option value="4">4 — Bueno</option>
+      <option value="3">3 — Aceptable</option>
+      <option value="2">2 — Flojo</option>
+      <option value="1">1 — Malo</option>
+    </select>
+    <label for="comentario" style="margin-top:1rem">Comentario (opcional)</label>
+    <textarea id="comentario" rows="3" placeholder="Qué habría que mejorar"></textarea>
+    <div class="acciones">
+      <button class="secundario" id="cancelar">Cancelar</button>
+      <button id="guardar">Guardar</button>
+    </div>
+  </dialog>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let filaACalificar = null;
+
+    function mostrarAviso(clase, nodos) {
+      const aviso = document.createElement('div');
+      aviso.className = 'aviso ' + clase;
+      nodos.forEach((n) => aviso.appendChild(typeof n === 'string' ? document.createTextNode(n) : n));
+      $('resultado').replaceChildren(aviso);
+    }
+
+    function cargarPlanillas() {
+      google.script.run
+        .withSuccessHandler((planillas) => {
+          const select = $('planilla');
+          select.replaceChildren();
+          if (!planillas.length) {
+            select.appendChild(new Option('No hay planillas en la carpeta', ''));
+            return;
+          }
+          select.appendChild(new Option('Elegí una planilla…', ''));
+          planillas.forEach((p) => select.appendChild(new Option(p.nombre, p.id)));
+          $('generar').disabled = false;
+        })
+        .withFailureHandler((e) => {
+          $('planilla').replaceChildren(new Option('No se pudieron listar las planillas', ''));
+          mostrarAviso('error', [e.message]);
+        })
+        .listarPlanillas();
+    }
+
+    function cargarHistorial() {
+      google.script.run
+        .withSuccessHandler((corridas) => {
+          const cuerpo = $('historial');
+          if (!corridas.length) {
+            cuerpo.replaceChildren(fila(['Todavía no se generó ningún informe'], 'vacio', 5));
+            return;
+          }
+          cuerpo.replaceChildren(...corridas.map(filaDeCorrida));
+        })
+        .withFailureHandler((e) => {
+          $('historial').replaceChildren(fila([e.message], 'vacio', 5));
+        })
+        .listarHistorial(25);
+    }
+
+    function fila(textos, clase, colspan) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.textContent = textos[0];
+      if (clase) td.className = clase;
+      if (colspan) td.colSpan = colspan;
+      tr.appendChild(td);
+      return tr;
+    }
+
+    function filaDeCorrida(corrida) {
+      const tr = document.createElement('tr');
+      [corrida.fecha, corrida.evaluado].forEach((texto) => {
+        const td = document.createElement('td');
+        td.textContent = texto;
+        tr.appendChild(td);
+      });
+
+      const tdLink = document.createElement('td');
+      if (corrida.informeUrl) {
+        const a = document.createElement('a');
+        a.href = corrida.informeUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = 'Abrir';
+        tdLink.appendChild(a);
+      }
+      tr.appendChild(tdLink);
+
+      const tdUsuario = document.createElement('td');
+      tdUsuario.textContent = corrida.usuario;
+      tr.appendChild(tdUsuario);
+
+      const tdCalificacion = document.createElement('td');
+      if (corrida.calificacion) {
+        const estrellas = document.createElement('span');
+        estrellas.className = 'estrellas';
+        estrellas.textContent = '★'.repeat(Number(corrida.calificacion)) + '☆'.repeat(5 - Number(corrida.calificacion));
+        estrellas.title = corrida.comentario || '';
+        tdCalificacion.appendChild(estrellas);
+      } else {
+        const boton = document.createElement('button');
+        boton.className = 'secundario';
+        boton.textContent = 'Calificar';
+        boton.style.padding = '.25rem .7rem';
+        boton.style.fontSize = '.8rem';
+        boton.addEventListener('click', () => abrirDialogo(corrida.fila));
+        tdCalificacion.appendChild(boton);
+      }
+      tr.appendChild(tdCalificacion);
+      return tr;
+    }
+
+    function abrirDialogo(fila) {
+      filaACalificar = fila;
+      $('comentario').value = '';
+      $('dialogo').showModal();
+    }
+
+    $('generar').addEventListener('click', () => {
+      const planillaId = $('planilla').value;
+      const nombre = $('evaluado').value.trim();
+      if (!planillaId) return mostrarAviso('error', ['Elegí una planilla de respuestas.']);
+      if (!nombre) return mostrarAviso('error', ['Escribí el nombre de la persona evaluada.']);
+
+      $('generar').disabled = true;
+      $('cargando').classList.remove('oculto');
+      $('resultado').replaceChildren();
+
+      google.script.run
+        .withSuccessHandler((r) => {
+          $('generar').disabled = false;
+          $('cargando').classList.add('oculto');
+          const link = document.createElement('a');
+          link.href = r.informeUrl;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = r.nombreArchivo;
+          mostrarAviso('ok', ['Informe listo en ' + r.segundos + ' s: ', link]);
+          $('evaluado').value = '';
+          cargarHistorial();
+        })
+        .withFailureHandler((e) => {
+          $('generar').disabled = false;
+          $('cargando').classList.add('oculto');
+          mostrarAviso('error', [e.message]);
+        })
+        .generarDesdeInterfaz({ planillaId: planillaId, nombreEvaluado: nombre });
+    });
+
+    $('cancelar').addEventListener('click', () => $('dialogo').close());
+
+    $('guardar').addEventListener('click', () => {
+      $('guardar').disabled = true;
+      google.script.run
+        .withSuccessHandler(() => {
+          $('guardar').disabled = false;
+          $('dialogo').close();
+          cargarHistorial();
+        })
+        .withFailureHandler((e) => {
+          $('guardar').disabled = false;
+          $('dialogo').close();
+          mostrarAviso('error', [e.message]);
+        })
+        .calificarInforme(filaACalificar, $('puntaje').value, $('comentario').value);
+    });
+
+    cargarPlanillas();
+    cargarHistorial();
+  </script>
+</body>
+</html>
