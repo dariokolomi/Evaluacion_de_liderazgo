@@ -167,7 +167,13 @@ def armar_caso(nombre, v):
                     "valor": {"Tar": v["tarea"], "Rel": v["rel"], "Camb": v["camb"]},
                     "percentil": v["con_p"],
                 },
-                "radar": {"evaluado": v["evaluado_vals"], "ideal": v["ideal"]},
+                "radar": {
+                    "evaluado": v["evaluado_vals"],
+                    "ideal": v["ideal"],
+                    # Las etiquetas del gráfico vienen partidas en dos líneas
+                    # con \n; el radar de Sheets las usa en una sola.
+                    "etiquetas": [e.replace("\n", " ") for e in v["labels"]],
+                },
             },
     }
 

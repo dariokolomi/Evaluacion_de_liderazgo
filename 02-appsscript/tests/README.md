@@ -11,6 +11,7 @@ python3 dump-docx.py            # informes completos generados por el motor
 node verificar-port.js          # Correccion.gs contra la referencia
 node verificar-lectura.js       # Lectura.gs contra la referencia, y punta a punta
 node verificar-documento.js     # Documento.gs contra los informes de Python
+node verificar-radar.js         # Radar.gs: serie graficada y armado del gráfico
 ```
 
 Para una corrida más exigente: `python3 dump-referencia.py --fuzz 2000`.
@@ -61,6 +62,19 @@ sintéticas de verdad y las hace pasar por el motor completo, incluyendo perfile
 que apuntan a un puntaje NEO exacto y un perfil sin brechas (el único que
 dispara los textos de respaldo). Con 29 informes quedan cubiertos los 25 textos
 de NEO, los 6 objetivos y las dos ramas de respaldo.
+
+## Verificar el radar
+
+Acá no hay motor Python que replicar pixel a pixel: el gráfico cambia de
+tecnología a propósito. Lo que se verifica es lo que sí tiene que ser idéntico
+—los 14 ejes, sus etiquetas y los dos valores de cada uno— más el armado del
+gráfico contra servicios simulados de Sheets y Drive: tipo RADAR, escala fija
+0-100, los colores institucionales, y que la planilla temporal se descarte
+siempre, incluso si la exportación falla.
+
+Que el dibujo se vea bien no lo decide un test. Eso ya se comparó visualmente
+contra el gráfico de matplotlib y está aprobado, con las pérdidas asumidas que
+figuran en la sección 4 del plan.
 
 ## Salvedades
 
