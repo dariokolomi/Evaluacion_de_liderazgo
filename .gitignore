@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
 
+# Apunta al proyecto de Apps Script de cada uno
+02-appsscript/.clasp.json
+
 # Configuración local de Claude Code
 .claude/
 .claude.json
