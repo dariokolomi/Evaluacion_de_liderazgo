@@ -126,6 +126,10 @@ Datos usados en la comparación:
       Verificado contra el motor Python: 2007 casos (planillas reales, bordes de
       los baremos y respuestas al azar), sin una sola diferencia.
       Cómo se corre: `tests/README.md`.
+- [x] Port de la lectura de la planilla → `Lectura.gs` (`SpreadsheetApp`).
+      Verificado contra Python sobre las celdas crudas de las planillas reales,
+      más casos construidos de planilla rota. A diferencia del motor actual,
+      una planilla incompleta se rechaza diciendo qué ítems faltan.
 - [ ] Port del armado del documento con `DocumentApp`.
 - [ ] Radar con `EmbeddedChartBuilder` tipo `RADAR` → insertar como imagen.
 - [ ] Historial + calificaciones en Sheet.
