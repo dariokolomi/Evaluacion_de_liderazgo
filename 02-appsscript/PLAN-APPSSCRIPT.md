@@ -122,7 +122,10 @@ Datos usados en la comparación:
 - [ ] Crear la Unidad compartida de Drive para los informes.
 
 ### Implementación
-- [ ] Port de la corrección de los 5 instrumentos (mecánico, sin sorpresas).
+- [x] Port de la corrección de los 5 instrumentos → `Correccion.gs`.
+      Verificado contra el motor Python: 2007 casos (planillas reales, bordes de
+      los baremos y respuestas al azar), sin una sola diferencia.
+      Cómo se corre: `tests/README.md`.
 - [ ] Port del armado del documento con `DocumentApp`.
 - [ ] Radar con `EmbeddedChartBuilder` tipo `RADAR` → insertar como imagen.
 - [ ] Historial + calificaciones en Sheet.
