@@ -2,6 +2,8 @@
 # Los tests son .js y corren en Node contra servicios simulados: no tienen
 # nada que hacer allá arriba, y clasp los subiría por ser .js.
 tests/**
+herramientas/**
 **/*.json
 !appsscript.json
 *.md
+*.docx
