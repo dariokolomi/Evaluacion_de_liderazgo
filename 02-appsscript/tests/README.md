@@ -7,8 +7,10 @@ exactamente lo mismo que el motor Python en producción.
 ```bash
 python3 dump-referencia.py      # planillas reales + bordes + 500 sintéticas
 python3 dump-celdas.py          # celdas crudas de las planillas reales
+python3 dump-docx.py            # informes completos generados por el motor
 node verificar-port.js          # Correccion.gs contra la referencia
 node verificar-lectura.js       # Lectura.gs contra la referencia, y punta a punta
+node verificar-documento.js     # Documento.gs contra los informes de Python
 ```
 
 Para una corrida más exigente: `python3 dump-referencia.py --fuzz 2000`.
@@ -40,10 +42,34 @@ que la cadena entera da lo mismo. Cierra con casos construidos a mano —celdas
 basura, encabezados que se parecen a ítems, hojas vacías— que ninguna planilla
 real tiene.
 
+## Verificar el armado del informe
+
+Comparar dos `.docx` byte a byte no diría nada. `dump-docx.py` genera el informe
+con el motor Python y vuelca su **estructura**: el orden de párrafos y tablas, el
+texto de cada tramo con su formato (negrita, cursiva, tamaño, color) y el
+sombreado de cada celda. `verificar-documento.js` corre `Documento.gs` contra un
+`DocumentApp` simulado (`stub-documentapp.js`) y exige la misma estructura,
+bloque por bloque.
+
+El stub sólo implementa lo que el port usa. Si mañana `Documento.gs` empieza a
+usar otra parte de la API, ahí va a fallar — que es justo lo que se busca:
+enterarse antes de subirlo, no después.
+
+Las 3 planillas reales no alcanzan: no recorren las secciones condicionales ni
+los 25 textos de NEO. Por eso `dump-docx.py` también escribe planillas
+sintéticas de verdad y las hace pasar por el motor completo, incluyendo perfiles
+que apuntan a un puntaje NEO exacto y un perfil sin brechas (el único que
+dispara los textos de respaldo). Con 29 informes quedan cubiertos los 25 textos
+de NEO, los 6 objetivos y las dos ramas de respaldo.
+
 ## Salvedades
 
-- `referencia-python.json` y `celdas-python.json` están en `.gitignore`:
-  contienen las respuestas crudas de personas evaluadas reales. Se regeneran.
+- `referencia-python.json`, `celdas-python.json` y `documento-python.json` están
+  en `.gitignore`: contienen las respuestas crudas y los informes completos de
+  personas evaluadas reales. Se regeneran.
+- El modelo `.docx` de referencia es `MODELO DE INFORME 2.docx`, no
+  `MODELO DE INFORME.docx`: este último no trae el estilo `Normal Table` y el
+  motor Python falla con él.
 - `Planilla de Preguntas (1).xlsx` es el formulario en blanco, sin respuestas.
   El motor Python explota con ella (`KeyError: 1`); la lectura nueva la rechaza
   diciendo qué le falta. Es la única diferencia buscada respecto de Python.

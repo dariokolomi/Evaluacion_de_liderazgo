@@ -62,6 +62,18 @@ Estos hallazgos son los que hicieron viable la migración. No repetir el anális
   `os.path.join(BASE_DIR, filename)` sin sanitizar. Desaparece al migrar a Drive por ID.
 - El filesystem funciona como base de datos: `/api/files` lista el directorio.
 - `.runs_history.json` sin lock de escritura concurrente.
+- **`compartido/modelos/MODELO DE INFORME.docx` rompe el motor**: no trae el
+  estilo `Normal Table` y la corrida termina en `KeyError`. La app lo ofrece
+  igual en el desplegable, porque lista todo el contenido de la carpeta.
+  `MODELO DE INFORME 2.docx` es byte a byte el mismo archivo que usa la
+  distribución Windows y sí funciona.
+- **Puntajes NEO fuera del baremo se informan como "Promedio"**:
+  `neo_baremo[d].get(neo_raw[d], 50)` cae en T=50 cuando el puntaje directo no
+  está en la tabla. Los baremos no cubren todo el rango 0-48: Apertura llega
+  hasta 44, así que un puntaje de 45 a 48 —el más alto posible— se informa como
+  Promedio. Pasa lo mismo con Extraversión bajo 13 y con Amabilidad y
+  Responsabilidad bajo 16. Portado tal cual; hay que decidir con criterio
+  psicométrico qué corresponde hacer.
 
 ---
 
@@ -130,7 +142,11 @@ Datos usados en la comparación:
       Verificado contra Python sobre las celdas crudas de las planillas reales,
       más casos construidos de planilla rota. A diferencia del motor actual,
       una planilla incompleta se rechaza diciendo qué ítems faltan.
-- [ ] Port del armado del documento con `DocumentApp`.
+- [x] Port del armado del documento → `Documento.gs` + `Textos.gs`.
+      Verificado comparando la estructura del informe (orden de bloques, texto y
+      formato de cada tramo, sombreado de celdas) contra la del `.docx` que
+      genera Python, sobre 29 perfiles: los 3 reales más sintéticos que cubren
+      los 25 textos de NEO, los 6 objetivos y las ramas de respaldo.
 - [ ] Radar con `EmbeddedChartBuilder` tipo `RADAR` → insertar como imagen.
 - [ ] Historial + calificaciones en Sheet.
 - [ ] UI con `HtmlService` (adaptar `templates/index.html`, quitar SSE).

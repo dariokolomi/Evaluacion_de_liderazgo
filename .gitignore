@@ -8,6 +8,7 @@ __pycache__/
 # Volcados del verificador: se regeneran y contienen respuestas de personas reales
 02-appsscript/tests/referencia-python.json
 02-appsscript/tests/celdas-python.json
+02-appsscript/tests/documento-python.json
 
 # Documento personal, no pertenece al proyecto
 Resumen Clase 1*.docx
