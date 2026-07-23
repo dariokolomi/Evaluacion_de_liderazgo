@@ -5,5 +5,8 @@ __pycache__/
 .claude/
 .claude.json
 
+# Referencia del verificador: se regenera y contiene respuestas de personas reales
+02-appsscript/tests/referencia-python.json
+
 # Documento personal, no pertenece al proyecto
 Resumen Clase 1*.docx
