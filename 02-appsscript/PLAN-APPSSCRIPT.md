@@ -158,7 +158,12 @@ Datos usados en la comparación:
       Configuración externa en `Configuracion.gs` (nada de IDs hardcodeados).
 - [x] Restricción de acceso por `GroupsApp` → `Acceso.gs`. Se verifica dentro de
       la operación, no sólo en `doGet`.
-- [ ] UI con `HtmlService` (adaptar `templates/index.html`, quitar SSE).
+- [x] UI con `HtmlService` → `WebApp.gs` + `Interfaz.html`. Sin SSE: la corrida
+      tarda segundos y Apps Script no permite streaming, así que la barra de
+      progreso por etapas se cambia por un spinner.
+      **Falta portar el tablero de métricas** (KPIs y 4 gráficos de
+      `templates/index.html`): se alimenta de calificaciones acumuladas, que en
+      el sistema nuevo todavía no existen. Se decide cuando haya datos.
 - [ ] **Probar el proyecto de verdad en Apps Script** con una planilla real:
       todo lo anterior está verificado en Node contra servicios simulados, que
       no prueban que la API real se comporte como el simulacro.

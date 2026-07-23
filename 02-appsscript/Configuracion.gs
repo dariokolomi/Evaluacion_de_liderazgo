@@ -8,11 +8,13 @@
  */
 
 var PROP_CARPETA_INFORMES = 'CARPETA_INFORMES_ID';
+var PROP_CARPETA_PLANILLAS = 'CARPETA_PLANILLAS_ID';
 var PROP_HISTORIAL = 'HISTORIAL_SHEET_ID';
 var PROP_GRUPO_AUTORIZADO = 'GRUPO_AUTORIZADO';
 
 var DESCRIPCION_PROPIEDADES = {};
 DESCRIPCION_PROPIEDADES[PROP_CARPETA_INFORMES] = 'ID de la carpeta de la Unidad compartida donde se guardan los informes';
+DESCRIPCION_PROPIEDADES[PROP_CARPETA_PLANILLAS] = 'ID de la carpeta donde se dejan las planillas de respuestas a procesar';
 DESCRIPCION_PROPIEDADES[PROP_HISTORIAL] = 'ID del Google Sheet de historial y calificaciones';
 DESCRIPCION_PROPIEDADES[PROP_GRUPO_AUTORIZADO] = 'Dirección del Grupo de Google que puede usar la app (ej. informes-rrhh@kolektor.com.ar)';
 
@@ -23,7 +25,7 @@ DESCRIPCION_PROPIEDADES[PROP_GRUPO_AUTORIZADO] = 'Dirección del Grupo de Google
 function configuracion() {
   var propiedades = PropertiesService.getScriptProperties().getProperties();
   var faltantes = [];
-  [PROP_CARPETA_INFORMES, PROP_HISTORIAL, PROP_GRUPO_AUTORIZADO].forEach(function (clave) {
+  [PROP_CARPETA_INFORMES, PROP_CARPETA_PLANILLAS, PROP_HISTORIAL, PROP_GRUPO_AUTORIZADO].forEach(function (clave) {
     if (!propiedades[clave]) faltantes.push(clave + ' (' + DESCRIPCION_PROPIEDADES[clave] + ')');
   });
   if (faltantes.length) {
@@ -33,6 +35,7 @@ function configuracion() {
   }
   return {
     carpetaInformesId: propiedades[PROP_CARPETA_INFORMES],
+    carpetaPlanillasId: propiedades[PROP_CARPETA_PLANILLAS],
     historialId: propiedades[PROP_HISTORIAL],
     grupoAutorizado: propiedades[PROP_GRUPO_AUTORIZADO]
   };
