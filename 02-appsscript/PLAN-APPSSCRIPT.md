@@ -147,7 +147,10 @@ Datos usados en la comparación:
       formato de cada tramo, sombreado de celdas) contra la del `.docx` que
       genera Python, sobre 29 perfiles: los 3 reales más sintéticos que cubren
       los 25 textos de NEO, los 6 objetivos y las ramas de respaldo.
-- [ ] Radar con `EmbeddedChartBuilder` tipo `RADAR` → insertar como imagen.
+- [x] Radar con `EmbeddedChartBuilder` tipo `RADAR` → `Radar.gs`.
+      Verificado que la serie y las etiquetas graficadas son idénticas a las de
+      matplotlib en 307 perfiles, y que la planilla temporal se descarta siempre.
+      Lo visual no se verifica con tests: ya se comparó a ojo y está aprobado.
 - [ ] Historial + calificaciones en Sheet.
 - [ ] UI con `HtmlService` (adaptar `templates/index.html`, quitar SSE).
 - [ ] Restricción de acceso por `GroupsApp` en `doGet`.
