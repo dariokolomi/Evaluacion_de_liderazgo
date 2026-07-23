@@ -12,6 +12,7 @@ node verificar-port.js          # Correccion.gs contra la referencia
 node verificar-lectura.js       # Lectura.gs contra la referencia, y punta a punta
 node verificar-documento.js     # Documento.gs contra los informes de Python
 node verificar-radar.js         # Radar.gs: serie graficada y armado del gráfico
+node verificar-orquestador.js   # Informe.gs: flujo completo contra Drive simulado
 ```
 
 Para una corrida más exigente: `python3 dump-referencia.py --fuzz 2000`.
@@ -75,6 +76,16 @@ siempre, incluso si la exportación falla.
 Que el dibujo se vea bien no lo decide un test. Eso ya se comparó visualmente
 contra el gráfico de matplotlib y está aprobado, con las pérdidas asumidas que
 figuran en la sección 4 del plan.
+
+## Verificar el orquestador
+
+El riesgo del orquestador no son las cuentas —eso ya está verificado pieza por
+pieza— sino el orden de las operaciones, lo que crea en Drive y **lo que deja
+tirado cuando algo sale mal**. Se prueba contra servicios de Google simulados
+que registran lo que se les pidió: el camino feliz, la planilla en blanco, el
+usuario fuera del grupo, el grupo que no se puede consultar, el proyecto sin
+configurar y la exportación que falla. En todos los caminos de error se exige
+que no quede nada a medio crear y que la corrida no se registre.
 
 ## Salvedades
 
