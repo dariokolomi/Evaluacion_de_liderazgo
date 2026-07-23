@@ -31,8 +31,15 @@ reinterpretan.**
 │   └── SESION_CONTINUIDAD.md   Registro de la corrida manual de abril 2026
 └── distribucion-windows/   Copia autocontenida con .bat para PC sin entorno
 
-02-appsscript/        Migración a Google Workspace (en planificación)
-└── PLAN-APPSSCRIPT.md      Plan aprobado — leer antes de retomar
+02-appsscript/        Migración a Google Workspace — código portado, sin subir todavía
+├── PLAN-APPSSCRIPT.md      Plan aprobado y estado del port — leer antes de retomar
+├── PUESTA-EN-MARCHA.docx   Guía para subir el proyecto a Workspace
+├── *.gs                    El proyecto: motor, orquestador, web app y métricas
+├── Interfaz.html           La UI que sirve HtmlService
+├── appsscript.json         Manifiesto: scopes y servicios avanzados
+├── tests/                  Verificación en Node contra el motor Python y contra
+│                           servicios de Google simulados
+└── herramientas/           Lo que genera la guía en Word
 
 compartido/           Datos que alimentan a ambos proyectos
 ├── instrumentos/     Claves, baremos y planillas de respuestas
@@ -55,11 +62,17 @@ El historial y las calificaciones quedan en `.runs_history.json`.
 ## Estado y rumbo
 
 La versión actual es **monousuario y local**: no tiene autenticación y usa el filesystem
-como base de datos. Está aprobada su migración a **Google Apps Script + Drive + Sheets**
-para volverla multiusuario con login de Google Workspace, sin infraestructura que operar.
+como base de datos. Su migración a **Google Apps Script + Drive + Sheets** está aprobada y
+el código ya está portado entero: corrección, lectura, armado del informe, radar,
+orquestador, interfaz web y métricas.
 
-El plan completo, con las alternativas evaluadas y los pendientes, está en
-[`02-appsscript/PLAN-APPSSCRIPT.md`](02-appsscript/PLAN-APPSSCRIPT.md).
+Falta subirlo a un proyecto de Apps Script y probarlo con una planilla real. Todo está
+verificado en Node —contra el motor Python y contra servicios de Google simulados— pero
+eso no prueba que la API real se comporte igual.
+
+El plan y el estado del port están en
+[`02-appsscript/PLAN-APPSSCRIPT.md`](02-appsscript/PLAN-APPSSCRIPT.md); los pasos para
+subirlo, en [`02-appsscript/PUESTA-EN-MARCHA.docx`](02-appsscript/PUESTA-EN-MARCHA.docx).
 
 > Los informes contienen **datos psicométricos de empleados**. Tratar el contenido de
 > `salidas/` y `compartido/instrumentos/` como información personal sensible.
