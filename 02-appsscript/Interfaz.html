@@ -93,7 +93,10 @@
     tr:hover td { background: #fafbfe; }
     .estrellas { color: var(--acento); letter-spacing: .1em; white-space: nowrap; }
     .vacio { color: #7b8794; font-style: italic; }
-    .oculto { display: none; }
+    .cargando { display: flex; align-items: center; gap: .6rem; }
+    /* Utilitaria para esconder: con !important le gana a un display propio del
+       elemento (si no, un `display` más específico lo deja siempre visible). */
+    .oculto { display: none !important; }
     dialog { border: 1px solid var(--borde); border-radius: 8px; padding: 1.5rem; max-width: 26rem; width: 90%; }
     dialog h3 { margin: 0 0 1rem; color: var(--cchh); font-size: 1rem; }
     dialog .acciones { justify-content: flex-end; }
@@ -153,7 +156,7 @@
       </div>
       <div class="acciones">
         <button id="generar" disabled>Generar informe</button>
-        <div id="cargando" class="oculto" style="display:flex;align-items:center;gap:.6rem">
+        <div id="cargando" class="cargando oculto">
           <div class="spinner"></div>
           <span style="font-size:.9rem">Corrigiendo y armando el informe…</span>
         </div>
