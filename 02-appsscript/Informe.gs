@@ -86,7 +86,11 @@ function abrirComoPlanilla(archivoId, temporales) {
   }
   var copia = Drive.Files.copy(
     { name: archivo.getName() + ' (convertida)', mimeType: MimeType.GOOGLE_SHEETS },
-    archivoId
+    archivoId,
+    // Sin esto, el servicio avanzado de Drive no ve los archivos que están en
+    // Unidades compartidas y responde "File not found". DriveApp sí las maneja
+    // solo, pero la API REST cruda necesita que se lo pidan explícitamente.
+    { supportsAllDrives: true }
   );
   temporales.push(copia.id);
   return { libro: SpreadsheetApp.openById(copia.id), nombre: archivo.getName() };
