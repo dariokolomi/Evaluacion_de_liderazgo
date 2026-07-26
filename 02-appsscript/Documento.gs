@@ -16,10 +16,19 @@ var NARANJA_SUAVE = '#FCE4D6';
 var BLANCO = '#FFFFFF';
 
 // Ancho útil de una página A4 (595 pt) con márgenes de 72 pt: 595 - 2×72 ≈ 451.
-// Se fija en vez de calcularlo con getPageWidth()/getMargin*(): en el documento
-// recién creado esos valores no están asentados y devolvían un ancho más chico
-// que el real, encogiendo el gráfico. A4 es el tamaño del Workspace (es-AR).
+// A4 es el tamaño de página del Workspace en es-AR.
 var ANCHO_GRAFICO_PT = 451;
+
+// setWidth()/setHeight() de InlineImage esperan PÍXELES, no puntos —está así en
+// la documentación—, y Docs los convierte a 96 DPI al exportar. Pasarle puntos
+// directamente encogía la imagen un 25 %: 451 puntos entraban como 451 px y
+// salían como 338 pt en el .docx, más chico incluso que los 432 pt (6") del
+// informe original. Medido sobre tres informes generados antes de encontrarlo.
+var PIXELES_POR_PUNTO = 96 / 72;
+
+function puntosAPixeles(puntos) {
+  return Math.round(puntos * PIXELES_POR_PUNTO);
+}
 var SANGRIA_VINETA_PT = 14.173228; // Cm(0.5)
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -363,11 +372,14 @@ function seccionGrafico(body, nombre, imagenRadar, cel, cam, con) {
   body.appendParagraph('');
 
   var imagen = body.appendImage(imagenRadar);
-  // Ocupa el ancho útil de la página. setWidth solo deformaría: el alto se
-  // escala en proporción.
-  var alto = Math.round(imagen.getHeight() * ANCHO_GRAFICO_PT / imagen.getWidth());
-  imagen.setWidth(ANCHO_GRAFICO_PT);
-  imagen.setHeight(alto);
+  // Ocupa el ancho útil de la página, en píxeles porque es lo que espera la API.
+  // El alto se escala en proporción: setWidth a secas deformaría la imagen. La
+  // proporción se calcula con getHeight()/getWidth(), que están en la misma
+  // unidad, así que no hace falta convertirlos.
+  var anchoPx = puntosAPixeles(ANCHO_GRAFICO_PT);
+  var altoPx = Math.round(imagen.getHeight() * anchoPx / imagen.getWidth());
+  imagen.setWidth(anchoPx);
+  imagen.setHeight(altoPx);
 
   body.appendParagraph('');
   parrafo(body, 'Lectura del mapa:', { negrita: true });
