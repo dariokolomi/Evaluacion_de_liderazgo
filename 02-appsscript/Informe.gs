@@ -49,9 +49,10 @@ function generarInforme(pedido) {
     // caso el punto 5 sale con la síntesis determinista. Ver Sintesis.gs.
     // Las dos etapas de la síntesis las marca el propio módulo, que es el que
     // sabe cuándo arranca cada bloque.
-    var sintesis = sintesisDeLiderazgo(nombre, resultados, function (bloque) {
+    var intentoSintesis = sintesisDeLiderazgo(nombre, resultados, function (bloque) {
       marcarEtapa(token, bloque === 0 ? 3 : 4);
     });
+    var sintesis = intentoSintesis.sintesis;
 
     marcarEtapa(token, 5);
     var nombreArchivo = nombreDeInforme(nombre, inicio);
@@ -88,7 +89,12 @@ function generarInforme(pedido) {
       informeUrl: archivo.getUrl(),
       nombreArchivo: nombreArchivo + '.docx',
       evaluado: nombre,
-      segundos: segundos
+      segundos: segundos,
+      // Para que la interfaz pueda avisar cuando el punto 5 salió con el texto
+      // determinista, y por qué. Sin esto el informe sale pobre en silencio y hay
+      // que adivinar si fue la clave, la cuota o una validación.
+      sintesisAsistida: !!sintesis,
+      sintesisMotivo: intentoSintesis.motivo
     };
   } finally {
     descartarTemporales(temporales);

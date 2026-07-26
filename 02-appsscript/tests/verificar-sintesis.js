@@ -45,6 +45,7 @@ function cargarGs(propiedades, fetchSimulado) {
     `${fuente}\nreturn { corregir, perfilParaSintesis, validarSintesis, validarBloque,
       mensajesBloqueDescriptivo, mensajesBloqueAnalitico, jsonDeRespuesta,
       percentilesCitados, puntajesTCitados, sintesisDeLiderazgo, nivelPorPercentil,
+      validarNivelesCoherentes,
       SINTESIS_BLOQUE_DESCRIPTIVO, SINTESIS_BLOQUE_ANALITICO };`
   )(PropertiesService, UrlFetchApp, consolaMuda);
 }
@@ -299,6 +300,51 @@ ok(gs.jsonDeRespuesta(null) === null, 'un contenido nulo devuelve null');
 ok(gs.percentilesCitados('va P75 y P99 acá').join(',') === '75,99', 'se detectan los percentiles citados');
 ok(gs.puntajesTCitados('con T=64 y T = 50').join(',') === '64,50', 'se detectan los puntajes T citados');
 
+// ── Coherencia entre el nivel que dice el texto y el que tiene la dimensión ──
+// Pasó en un informe real: el modelo escribió "un nivel medio en Conductas
+// Orientadas a la Tarea y Liderazgo Orientado a Metas" cuando la segunda está en
+// Alto. No cita números ni usa jerga, así que ninguna otra validación lo veía, y
+// además contradecía a la sección 3 del mismo informe (HU2).
+[
+  [false, 'el error real del informe',
+    'Con un nivel medio en Conductas Orientadas a la Tarea y Liderazgo Orientado a Metas, hay oportunidad.'],
+  [true, 'varias dimensiones que sí comparten el nivel',
+    'Presenta un nivel alto en Consideración Individualizada, Liderazgo Considerado y Liderazgo Participativo.'],
+  [false, 'el mismo error escrito como contraste',
+    'El nivel alto en Liderazgo Participativo contrasta con el nivel medio en Liderazgo Orientado a Metas.'],
+  [true, 'dos niveles distintos en la misma oración, ambos correctos',
+    'Aunque la Inspiración y Motivación Inspiracional muestra un nivel alto, la Estimulación Intelectual se encuentra en nivel medio.'],
+  [true, 'la dimensión antes del nivel no se revisa',
+    'La Estimulación Intelectual se encuentra en nivel medio.'],
+  [true, 'una inferencia larga y correcta',
+    'La combinación de niveles altos en Consideración Individualizada, Liderazgo Considerado y Conductas Orientadas a las Relaciones, junto con un nivel alto en Laissez-Faire, sugiere presencia afectiva.'],
+  // Salidas reales del modelo que el validador rechazaba de más: el alcance de un
+  // nivel se comía la dimensión de la cláusula siguiente, que tiene su propio nivel.
+  [true, 'dos cláusulas separadas por "su"',
+    'Aunque Fran muestra un nivel alto en Inspiración / Motivación Inspiracional, su Carisma / Influencia Idealizada se encuentra en nivel medio.'],
+  [true, 'dos cláusulas separadas por "pero"',
+    'Con un nivel alto en Extraversión y Conductas Orientadas a las Relaciones, pero un nivel medio en Conductas Orientadas a la Tarea y Liderazgo Directivo, Fran demuestra energía.'],
+  [false, 'un error metido en el medio de una lista correcta',
+    'Presenta un nivel alto en Consideración Individualizada, Liderazgo Considerado y Conductas Orientadas a la Tarea.'],
+  [false, 'un nivel bajo donde la dimensión está alta',
+    'Muestra un nivel bajo en Liderazgo Participativo.'],
+  [true, 'un rasgo de personalidad bien atribuido', 'Se observa un nivel alto de Extraversión.'],
+  [false, 'un rasgo de personalidad mal atribuido', 'Se observa un nivel bajo de Extraversión.'],
+  [true, '"promedio" cuenta como "medio"', 'Un nivel promedio en Conductas Orientadas a la Tarea.'],
+  [true, 'una oración sin niveles', 'Fortalece la intervención con acuerdos de inicio de ciclo.'],
+  [true, '"bajo presión" no es un nivel', 'Mantener la calma bajo presión sostenida es clave para el rol.'],
+].forEach(([esperaOk, nombre, texto]) => {
+  const res = gs.validarNivelesCoherentes(texto, perfil);
+  ok(res.ok === esperaOk, `niveles — ${nombre}`, res.motivo || 'lo aceptó y no debía');
+});
+
+// Y que la validación esté enchufada, no sólo definida.
+r = conCambio((s) => {
+  s.areasDesarrollo[0].texto = 'Con un nivel medio en Liderazgo Orientado a Metas hay oportunidad.';
+});
+ok(!r.ok && /Orientado a Metas/.test(r.motivo),
+  'la síntesis completa rechaza un nivel mal atribuido', r.motivo);
+
 // ── Validación por bloque ──
 ok(gs.validarBloque(gs.SINTESIS_BLOQUE_DESCRIPTIVO, bloqueDescriptivo(), perfil).ok,
   'el bloque descriptivo bien formado se acepta');
@@ -318,12 +364,14 @@ ok(!gs.validarBloque(gs.SINTESIS_BLOQUE_DESCRIPTIVO, bd, perfil).ok,
 const CLAVE = { NVIDIA_API_KEY: 'clave-de-prueba' };
 
 let sinClave = cargarGs({}, () => { throw new Error('no debería llamar'); });
-ok(sinClave.sintesisDeLiderazgo('Fran', resultados) === null,
-  'sin clave configurada devuelve null y no llama a la API');
+const sinClaveR = sinClave.sintesisDeLiderazgo('Fran', resultados);
+ok(sinClaveR.sintesis === null, 'sin clave configurada no devuelve síntesis y no llama a la API');
+ok(/NVIDIA_API_KEY/.test(sinClaveR.motivo),
+  'y el motivo nombra la propiedad que falta, para no tener que adivinar', sinClaveR.motivo);
 
 let reg = { llamadas: [] };
 let bueno = cargarGs(CLAVE, fetchPorBloque(reg));
-let obtenida = bueno.sintesisDeLiderazgo('Fran', resultados);
+let obtenida = bueno.sintesisDeLiderazgo('Fran', resultados).sintesis;
 ok(obtenida !== null, 'con las dos respuestas válidas devuelve la síntesis');
 ok(reg.llamadas.join(',') === 'descriptivo,analitico',
   'son dos llamadas, primero la descriptiva y después la analítica', reg.llamadas.join(','));
@@ -338,7 +386,10 @@ ok(gs.validarSintesis(obtenida, perfil).ok, 'la síntesis unida pasa la validaci
 reg = { llamadas: [] };
 let falla1 = cargarGs(CLAVE, fetchPorBloque(reg, (clave) =>
   clave === 'descriptivo' ? respuestaSimulada(500, 'boom') : null));
-ok(falla1.sintesisDeLiderazgo('Fran', resultados) === null, 'si falla el bloque descriptivo devuelve null');
+const falla1R = falla1.sintesisDeLiderazgo('Fran', resultados);
+ok(falla1R.sintesis === null, 'si falla el bloque descriptivo no devuelve síntesis');
+ok(/descriptivo/.test(falla1R.motivo) && /500/.test(falla1R.motivo),
+  'el motivo dice qué bloque falló y con qué error', falla1R.motivo);
 ok(reg.llamadas.indexOf('analitico') < 0,
   'si falla el primer bloque no se pide el segundo', reg.llamadas.join(','));
 
@@ -347,8 +398,9 @@ ok(reg.llamadas.indexOf('analitico') < 0,
 reg = { llamadas: [] };
 let falla2 = cargarGs(CLAVE, fetchPorBloque(reg, (clave) =>
   clave === 'analitico' ? respuestaSimulada(500, 'boom') : null));
-ok(falla2.sintesisDeLiderazgo('Fran', resultados) === null,
-  'si falla el bloque analítico se descarta la síntesis entera');
+const falla2R = falla2.sintesisDeLiderazgo('Fran', resultados);
+ok(falla2R.sintesis === null, 'si falla el bloque analítico se descarta la síntesis entera');
+ok(/anal/.test(falla2R.motivo), 'y el motivo nombra el bloque analítico', falla2R.motivo);
 
 // Reintento acotado a su propio bloque.
 reg = { llamadas: [] };
@@ -357,7 +409,7 @@ let reintenta = cargarGs(CLAVE, fetchPorBloque(reg, (clave, datos, r) => {
   if (clave === 'analitico' && previas === 1) return respuestaSimulada(200, 'esto no es json');
   return null;
 }));
-ok(reintenta.sintesisDeLiderazgo('Fran', resultados) !== null,
+ok(reintenta.sintesisDeLiderazgo('Fran', resultados).sintesis !== null,
   'un JSON roto en el bloque analítico se recupera en su segundo intento');
 ok(reg.llamadas.filter((l) => l === 'descriptivo').length === 1,
   'el reintento del analítico no vuelve a pedir el descriptivo',
@@ -365,7 +417,8 @@ ok(reg.llamadas.filter((l) => l === 'descriptivo').length === 1,
 
 reg = { llamadas: [] };
 let error500 = cargarGs(CLAVE, fetchPorBloque(reg, () => respuestaSimulada(500, 'boom')));
-ok(error500.sintesisDeLiderazgo('Fran', resultados) === null, 'un error de la API devuelve null');
+ok(error500.sintesisDeLiderazgo('Fran', resultados).sintesis === null,
+  'un error de la API no devuelve síntesis');
 ok(reg.llamadas.length === 2, 'un error de la API se reintenta una vez por bloque', `hubo ${reg.llamadas.length}`);
 
 reg = { llamadas: [] };
@@ -374,8 +427,9 @@ let invalido = cargarGs(CLAVE, fetchPorBloque(reg, (clave, datos) => {
   datos.fortalezas[0].texto = 'Consideración en P83.'; // percentil inventado
   return respuestaSimulada(200, JSON.stringify(datos));
 }));
-ok(invalido.sintesisDeLiderazgo('Fran', resultados) === null,
-  'un bloque que no valida devuelve null en vez de llegar al informe');
+const invR = invalido.sintesisDeLiderazgo('Fran', resultados);
+ok(invR.sintesis === null, 'un bloque que no valida no llega al informe');
+ok(/P83/.test(invR.motivo), 'y el motivo dice qué número inventó el modelo', invR.motivo);
 
 // Un corte por tiempo sí se reintenta: partido en bloques, un corte es un atasco
 // puntual del servicio (medido: un bloque de 25 s que tardó 77 s), no el techo
@@ -385,8 +439,9 @@ let corte = cargarGs(CLAVE, () => {
   reg.llamadas.push('x');
   throw new Error('Address unavailable: tardó demasiado');
 });
-ok(corte.sintesisDeLiderazgo('Fran', resultados) === null,
-  'si el corte por tiempo persiste, devuelve null');
+const corteR = corte.sintesisDeLiderazgo('Fran', resultados);
+ok(corteR.sintesis === null, 'si el corte por tiempo persiste, no devuelve síntesis');
+ok(/interrump/.test(corteR.motivo), 'y el motivo dice que la llamada se interrumpió', corteR.motivo);
 ok(reg.llamadas.length === 2,
   'un corte por tiempo se reintenta una vez', `hubo ${reg.llamadas.length}`);
 
@@ -398,7 +453,7 @@ let corteRecupera = cargarGs(CLAVE, fetchPorBloque(reg, (clave, datos, r) => {
   }
   return null;
 }));
-ok(corteRecupera.sintesisDeLiderazgo('Fran', resultados) !== null,
+ok(corteRecupera.sintesisDeLiderazgo('Fran', resultados).sintesis !== null,
   'un corte en el primer intento de cada bloque se recupera en el segundo');
 
 // ── El renderizado en el documento ──
@@ -436,8 +491,32 @@ ok(renderLlm.indexOf('Presencia afectiva y ausencia operativa') >= 0,
   'las inferencias del modelo llegan al documento');
 ok(renderLlm.indexOf('Principales Fortalezas') < 0,
   'con síntesis del LLM no se emite además el texto determinista');
-ok(/asistida por/.test(renderLlm),
-  'el informe declara que la síntesis fue asistida por un modelo');
+ok(/asistida por IA/.test(renderLlm),
+  'el informe declara que la síntesis fue asistida por IA');
+ok(renderLlm.indexOf('llama-3.3-nemotron-super-49b-v1.5') >= 0
+  && renderLlm.indexOf('nvidia/') < 0,
+  'la nota nombra el modelo sin el prefijo del proveedor');
+ok(!/percentiles y puntajes/.test(renderLlm),
+  'la nota no menciona percentiles ni puntajes: el PO pidió que este punto no los lleve');
+ok(/revisión profesional/.test(renderLlm),
+  'la nota conserva la advertencia de revisión profesional');
+
+// El rótulo va en negrita y el contenido no. En Docs appendText hereda el formato
+// del tramo anterior, así que sin apagar la negrita explícitamente el párrafo
+// entero salía en negrita — pasaba en todos los informes generados hasta ahora.
+const parrafosLlm = conLlm.bloques.filter((b) => b.tipo === 'parrafo' && b.tramos.length > 1);
+ok(parrafosLlm.length > 0, 'hay párrafos con rótulo y contenido para revisar');
+const mezclados = parrafosLlm.filter((p) => p.tramos.some((t) => t.negrita)
+  && p.tramos.some((t) => !t.negrita));
+ok(mezclados.length === parrafosLlm.length,
+  'en todo párrafo de rótulo + contenido, sólo el rótulo va en negrita',
+  parrafosLlm.filter((p) => p.tramos.every((t) => t.negrita))
+    .map((p) => p.tramos.map((t) => t.texto).join('')).join(' | '));
+
+const conAccion = parrafosLlm.find((p) => p.tramos[0].texto.indexOf('Acción:') >= 0);
+ok(conAccion && conAccion.tramos[0].negrita === true && conAccion.tramos[1].negrita === false,
+  '"Acción:" va en negrita y lo que sigue no',
+  conAccion && JSON.stringify(conAccion.tramos.map((t) => [t.texto.slice(0, 20), t.negrita])));
 
 const sinLlm = new Body();
 doc.seccionSintesis(sinLlm, resultados.neo, cel, cam, pot, con, null);
