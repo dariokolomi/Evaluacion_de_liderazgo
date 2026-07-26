@@ -55,11 +55,22 @@ function textoNegrita(p, texto, opciones) {
   return t;
 }
 
+/**
+ * Tramo de texto sin formato.
+ *
+ * La negrita y la cursiva se apagan EXPLÍCITAMENTE. En Docs, appendText hereda el
+ * formato del tramo anterior del mismo párrafo, así que después de un
+ * textoNegrita() —el patrón "Acción: " + el texto— todo lo que sigue salía
+ * también en negrita. Pasaba en el informe entero, no sólo en el punto 5:
+ * la sección 2 imprimía "Liderazgo Transformacional : P75. Con fortalezas…"
+ * completo en negrita.
+ */
 function textoNormal(p, texto, opciones) {
   var o = opciones || {};
   var t = p.appendText(texto);
+  t.setBold(false);
+  t.setItalic(!!o.cursiva);
   if (o.tamano) t.setFontSize(o.tamano);
-  if (o.cursiva) t.setItalic(true);
   return t;
 }
 
