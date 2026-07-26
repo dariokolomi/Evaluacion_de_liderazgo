@@ -16,6 +16,23 @@
  */
 
 var TITULO = 'Informes de Liderazgo — CCHH';
+
+/**
+ * Versión de la aplicación, visible en el encabezado.
+ *
+ * Existe para poder saber de un vistazo qué código está sirviendo el navegador.
+ * Sin esto, un deployment que quedó pinneado en una versión vieja o una pestaña
+ * cacheada se ven exactamente igual que un error del código nuevo, y el
+ * diagnóstico se vuelve adivinanza.
+ *
+ * SE SUBE A MANO EN CADA DESPLIEGUE: sumar 1 al último número (2.1 → 2.2 → …
+ * → 2.99). Cuando llegue a 2.99 se pasa a 3.1. No se calcula solo a propósito:
+ * el número de versión de Apps Script cuenta cada `clasp push`, que no es lo
+ * mismo que un despliegue, y un número que se mueve sin que nadie lo decida no
+ * sirve para hablar de "la 2.4".
+ */
+var VERSION_APP = 'v2.4';
+
 var LIMITE_HISTORIAL_COMPLETO = 5000;
 
 function doGet() {
@@ -34,12 +51,13 @@ function doGet() {
 
   var plantilla = HtmlService.createTemplateFromFile('Interfaz');
   plantilla.usuario = usuarioActual();
+  plantilla.version = VERSION_APP;
   // Los nombres de las etapas viajan desde el servidor para no tener la lista
   // escrita dos veces: si se agrega una etapa en Progreso.gs, la interfaz la
   // dibuja sola.
   plantilla.etapasJson = JSON.stringify(ETAPAS_INFORME);
   return plantilla.evaluate()
-    .setTitle(TITULO)
+    .setTitle(TITULO + ' ' + VERSION_APP)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
