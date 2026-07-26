@@ -29,12 +29,31 @@ function generarInforme(pedido) {
     throw new Error('Falta el nombre de la persona evaluada.');
   }
 
+  // El navegador manda un identificador para poder seguir el avance. Si no viene
+  // —por ejemplo, si generarInforme se llama desde el editor— no se registra nada
+  // y todo funciona igual. Ver Progreso.gs.
+  var token = (pedido && pedido.token) || '';
+
   var temporales = [];
   try {
+    marcarEtapa(token, 0);
     var planilla = abrirComoPlanilla(pedido.planillaId, temporales);
+
+    marcarEtapa(token, 1);
     var resultados = corregir(leerPlanilla(planilla.libro));
+
+    marcarEtapa(token, 2);
     var radar = generarImagenRadar(resultados, nombre);
 
+    // Devuelve null si el LLM no está configurado o no contestó a tiempo; en ese
+    // caso el punto 5 sale con la síntesis determinista. Ver Sintesis.gs.
+    // Las dos etapas de la síntesis las marca el propio módulo, que es el que
+    // sabe cuándo arranca cada bloque.
+    var sintesis = sintesisDeLiderazgo(nombre, resultados, function (bloque) {
+      marcarEtapa(token, bloque === 0 ? 3 : 4);
+    });
+
+    marcarEtapa(token, 5);
     var nombreArchivo = nombreDeInforme(nombre, inicio);
     var doc = DocumentApp.create(nombreArchivo);
     temporales.push(doc.getId());
@@ -45,11 +64,13 @@ function generarInforme(pedido) {
       nombre: nombre,
       fecha: Utilities.formatDate(inicio, Session.getScriptTimeZone(), 'dd/MM/yyyy'),
       resultados: resultados,
-      imagenRadar: radar
+      imagenRadar: radar,
+      sintesis: sintesis
     });
     quitarParrafoInicialVacio(cuerpo);
     doc.saveAndClose();
 
+    marcarEtapa(token, 6);
     var archivo = guardarComoDocx(doc.getId(), nombreArchivo, config.carpetaInformesId);
     var segundos = Math.round((new Date().getTime() - inicio.getTime()) / 100) / 10;
 
@@ -71,6 +92,7 @@ function generarInforme(pedido) {
     };
   } finally {
     descartarTemporales(temporales);
+    limpiarProgreso(token);
   }
 }
 

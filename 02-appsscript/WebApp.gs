@@ -3,10 +3,11 @@
  *
  * Reemplaza a app.py. Las diferencias que importan:
  *   - No hay login propio: entra quien está en el Grupo de Google.
- *   - No hay SSE. La corrida entera tarda pocos segundos, así que la barra de
- *     progreso con etapas se cambia por un spinner. Apps Script no permite
- *     streaming: sostener el progreso real exigiría hacer polling contra el
- *     Cache, y no vale la pena para una espera de segundos.
+ *   - No hay SSE: Apps Script no permite streaming. El progreso por etapas se
+ *     sostiene con el Cache y llamadas cortas del navegador, que es lo que
+ *     reemplaza al stream. Ver Progreso.gs — con la síntesis del punto 5 la
+ *     corrida pasó de un segundo a minutos, y ahí el spinner mudo dejó de
+ *     alcanzar.
  *   - No hay endpoint /download: los informes son archivos de Drive.
  *
  * Cada función llamada desde el navegador vuelve a verificar el acceso.
@@ -33,6 +34,10 @@ function doGet() {
 
   var plantilla = HtmlService.createTemplateFromFile('Interfaz');
   plantilla.usuario = usuarioActual();
+  // Los nombres de las etapas viajan desde el servidor para no tener la lista
+  // escrita dos veces: si se agrega una etapa en Progreso.gs, la interfaz la
+  // dibuja sola.
+  plantilla.etapasJson = JSON.stringify(ETAPAS_INFORME);
   return plantilla.evaluate()
     .setTitle(TITULO)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');

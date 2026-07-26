@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 
 const RAIZ = path.resolve(__dirname, '..');
-const ARCHIVOS_GS = ['Acceso.gs', 'Configuracion.gs', 'Historial.gs', 'Metricas.gs', 'Informe.gs', 'WebApp.gs'];
+const ARCHIVOS_GS = ['Acceso.gs', 'Configuracion.gs', 'Historial.gs', 'Metricas.gs', 'Progreso.gs', 'Informe.gs', 'WebApp.gs'];
 
 const GRUPO = 'informes-rrhh@kolektor.com.ar';
 const USUARIO = 'ana.perez@kolektor.com.ar';
@@ -40,7 +40,7 @@ function hojaFalsa(filas) {
 
 function crearEntorno(escenario) {
   const e = escenario || {};
-  const registro = { plantilla: null, titulo: null, htmlCrudo: null, grupo: null };
+  const registro = { plantilla: null, titulo: null, htmlCrudo: null, grupo: null, cache: {} };
 
   const hoja = hojaFalsa(e.filas || [ENCABEZADO]);
   const archivos = e.archivos || [
@@ -99,8 +99,18 @@ function crearEntorno(escenario) {
               addMetaTag() { return this; },
             }),
           };
+          // Se guarda para poder revisar lo que doGet le inyecta a la interfaz.
+          registro.plantillaObj = plantilla;
           return plantilla;
         },
+      },
+      // Cache simulado, para el progreso por etapas (Progreso.gs).
+      CacheService: {
+        getScriptCache: () => ({
+          put: (k, v) => { registro.cache[k] = v; },
+          get: (k) => (k in registro.cache ? registro.cache[k] : null),
+          remove: (k) => { delete registro.cache[k]; },
+        }),
       },
       Utilities: { formatDate: () => '23/07/2026 18:15' },
       DocumentApp: {}, MimeType: {}, UrlFetchApp: {}, ScriptApp: {}, Drive: {}, Charts: {},
@@ -114,7 +124,8 @@ function cargarGs(globales) {
   const nombres = Object.keys(globales);
   return new Function(
     ...nombres,
-    `${fuente}\nreturn { doGet, listarPlanillas, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml };`
+    `${fuente}\nreturn { doGet, listarPlanillas, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml,
+       progresoDeInforme, marcarEtapa, limpiarProgreso, ETAPAS_INFORME };`
   )(...nombres.map((n) => globales[n]));
 }
 
@@ -212,6 +223,73 @@ function main() {
   revisar('el comentario se recorta a 500 caracteres', conCorridas.hoja.datos[1][7].length === 500);
   revisar('calificarInforme exige acceso por su cuenta',
     !!intentar(() => gsSinAcceso.calificarInforme(2, 4, '')).error);
+
+  // ── Progreso por etapas ──────────────────────────────────────────
+  const prog = crearEntorno();
+  const gsProg = cargarGs(prog.globales);
+
+  revisar('hay entre 5 y 7 etapas, como pidió el PO',
+    gsProg.ETAPAS_INFORME.length >= 5 && gsProg.ETAPAS_INFORME.length <= 7,
+    `son ${gsProg.ETAPAS_INFORME.length}`);
+  revisar('los nombres de las etapas son cortos',
+    gsProg.ETAPAS_INFORME.every((e) => e.length <= 32),
+    gsProg.ETAPAS_INFORME.filter((e) => e.length > 32).join(' | '));
+
+  revisar('sin haber empezado, no hay progreso que informar',
+    gsProg.progresoDeInforme('tok-1') === null);
+
+  gsProg.marcarEtapa('tok-1', 0);
+  const p0 = gsProg.progresoDeInforme('tok-1');
+  revisar('la primera etapa se informa con su nombre y el total',
+    !!p0 && p0.etapa === 0 && p0.total === gsProg.ETAPAS_INFORME.length
+      && p0.nombre === gsProg.ETAPAS_INFORME[0],
+    JSON.stringify(p0));
+
+  gsProg.marcarEtapa('tok-1', 3);
+  const p3 = gsProg.progresoDeInforme('tok-1');
+  revisar('la etapa avanza al marcarse otra', !!p3 && p3.etapa === 3);
+
+  // Dos corridas simultáneas no se pisan: cada una tiene su propia clave.
+  gsProg.marcarEtapa('tok-2', 1);
+  revisar('dos corridas en paralelo no se mezclan',
+    gsProg.progresoDeInforme('tok-1').etapa === 3
+      && gsProg.progresoDeInforme('tok-2').etapa === 1);
+
+  gsProg.limpiarProgreso('tok-1');
+  revisar('al terminar, el progreso se borra', gsProg.progresoDeInforme('tok-1') === null);
+  revisar('y no se lleva el de la otra corrida', gsProg.progresoDeInforme('tok-2').etapa === 1);
+
+  revisar('sin token no se registra nada y no rompe',
+    !intentar(() => gsProg.marcarEtapa('', 2)).error
+      && gsProg.progresoDeInforme('') === null);
+
+  revisar('progresoDeInforme exige acceso por su cuenta',
+    !!intentar(() => gsSinAcceso.progresoDeInforme('tok-2')).error);
+
+  // Si el Cache falla, el informe tiene que seguir: perder el progreso es una
+  // molestia, perder el informe no.
+  const cacheRoto = crearEntorno();
+  cacheRoto.globales.CacheService = {
+    getScriptCache: () => ({
+      put: () => { throw new Error('cache caído'); },
+      get: () => { throw new Error('cache caído'); },
+      remove: () => { throw new Error('cache caído'); },
+    }),
+  };
+  const gsRoto = cargarGs(cacheRoto.globales);
+  revisar('si el Cache falla, marcarEtapa no lanza',
+    !intentar(() => gsRoto.marcarEtapa('tok', 1)).error);
+  revisar('si el Cache falla, limpiarProgreso no lanza',
+    !intentar(() => gsRoto.limpiarProgreso('tok')).error);
+  revisar('si el Cache falla, el progreso se informa como desconocido',
+    intentar(() => gsRoto.progresoDeInforme('tok')).valor === null);
+
+  // La interfaz recibe los nombres de las etapas del servidor: una sola lista.
+  gsProg.doGet();
+  const inyectado = prog.registro.plantillaObj && prog.registro.plantillaObj.etapasJson;
+  revisar('doGet le pasa a la interfaz los nombres de las etapas',
+    !!inyectado && JSON.parse(inyectado).length === gsProg.ETAPAS_INFORME.length,
+    String(inyectado));
 
   let fallados = 0;
   for (const [nombre, ok, detalle] of revisiones) {
