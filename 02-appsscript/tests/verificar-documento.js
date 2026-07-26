@@ -23,7 +23,7 @@ function cargarGs() {
   const fuente = ['Correccion.gs', 'Textos.gs', 'Documento.gs']
     .map((a) => fs.readFileSync(path.join(RAIZ, a), 'utf8'))
     .join('\n');
-  return new Function('DocumentApp', `${fuente}\nreturn { corregir, construirInforme };`)(DocumentApp);
+  return new Function('DocumentApp', `${fuente}\nreturn { corregir, construirInforme, seccionGrafico, ANCHO_GRAFICO_PT };`)(DocumentApp);
 }
 
 /** La fecha y el tamaño natural del radar salen del informe de Python:
@@ -141,7 +141,54 @@ function main() {
   }
 
   console.log(`\n${informes.length - fallados}/${informes.length} informes coinciden`);
-  return fallados ? 1 : 0;
+  return (fallados + verificarTamanoDelRadar()) ? 1 : 0;
+}
+
+/**
+ * El radar se dimensiona en píxeles, no en puntos.
+ *
+ * Se verifica aparte porque la comparación contra Python dejó de mirar el tamaño
+ * de la imagen —ahora es una decisión de layout— y sin esta comprobación el bug
+ * volvería sin que nada se ponga rojo. Pasó: `setWidth()` espera píxeles, se le
+ * pasaban puntos, y el gráfico salía un 25 % más chico (338 pt en lugar de 451)
+ * en tres informes seguidos antes de que alguien lo midiera.
+ */
+function verificarTamanoDelRadar() {
+  const gs = cargarGs();
+  const cuerpo = new Body();
+  const radarFalso = { ancho: 800, alto: 660 };
+  gs.seccionGrafico(cuerpo, 'Ana Pérez', radarFalso, {}, {}, {});
+  const imagen = (cuerpo.bloques || []).find((b) => b.tipo === 'imagen');
+
+  const esperadoPx = Math.round(gs.ANCHO_GRAFICO_PT * 96 / 72);
+  const problemas = [];
+  if (!imagen) {
+    problemas.push('no se insertó ninguna imagen');
+  } else {
+    if (imagen.ancho !== esperadoPx) {
+      problemas.push(`el ancho es ${imagen.ancho} px y tendría que ser ${esperadoPx} px`
+        + ` (${gs.ANCHO_GRAFICO_PT} pt convertidos a 96 DPI)`);
+    }
+    if (imagen.ancho <= gs.ANCHO_GRAFICO_PT) {
+      problemas.push('el ancho no está convertido: se le están pasando puntos a una API'
+        + ' que espera píxeles, y el gráfico va a salir un 25 % más chico');
+    }
+    const proporcion = imagen.alto / imagen.ancho;
+    const natural = radarFalso.alto / radarFalso.ancho;
+    if (Math.abs(proporcion - natural) > 0.01) {
+      problemas.push(`la imagen quedó deformada: proporción ${proporcion.toFixed(3)}`
+        + ` contra ${natural.toFixed(3)} del original`);
+    }
+  }
+
+  if (problemas.length) {
+    console.log('\n✗ tamaño del radar');
+    problemas.forEach((p) => console.log(`    ${p}`));
+    return 1;
+  }
+  console.log(`✓ tamaño del radar: ${imagen.ancho}×${imagen.alto} px`
+    + ` (= ${gs.ANCHO_GRAFICO_PT} pt de ancho, proporción conservada)`);
+  return 0;
 }
 
 process.exit(main());
