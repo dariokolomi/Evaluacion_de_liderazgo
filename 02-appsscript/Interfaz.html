@@ -34,6 +34,16 @@
     }
     header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
     header .usuario { font-size: .85rem; opacity: .85; }
+    /* La versión se muestra para poder saber de un vistazo qué código está
+       sirviendo el navegador. Sin esto, un deployment viejo o una pestaña
+       cacheada se confunden con un error del código nuevo. */
+    header .version {
+      font-size: .78rem;
+      font-weight: 400;
+      opacity: .75;
+      margin-left: .35rem;
+      font-variant-numeric: tabular-nums;
+    }
     main { max-width: 60rem; margin: 0 auto; padding: 1.5rem; }
     section {
       background: #fff;
@@ -97,15 +107,27 @@
     /* Línea de proceso: los puntos son las etapas reales de la generación, no un
        temporizador. La etapa en curso se marca en color y con su nombre al lado. */
     .proceso { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
-    .etapas { display: flex; align-items: center; gap: .3rem; }
+    /* Los puntos van unidos por un tramo para que se lea como línea de tiempo:
+       el tramo se pinta cuando la etapa que lo precede ya pasó. */
+    .etapas { display: flex; align-items: center; gap: 0; }
     .etapa {
       width: .5rem; height: .5rem;
       border-radius: 50%;
       background: var(--borde);
+      flex: none;
       transition: background .3s, transform .3s;
     }
     .etapa.hecha { background: var(--cchh); }
-    .etapa.actual { background: var(--acento); transform: scale(1.5); }
+    .etapa.actual { background: var(--acento); transform: scale(1.6); }
+    /* La última etapa: informe terminado. */
+    .etapa.final { background: var(--cchh); transform: scale(1.6); box-shadow: 0 0 0 3px var(--cchh-fondo); }
+    .union {
+      width: .9rem; height: 2px;
+      background: var(--borde);
+      flex: none;
+      transition: background .3s;
+    }
+    .union.hecha { background: var(--cchh); }
     .etapa-nombre {
       font-size: .85rem;
       color: var(--cchh);
@@ -113,6 +135,15 @@
       font-variant-numeric: tabular-nums;
     }
     .etapa-contador { font-size: .78rem; color: #7b8794; font-weight: 400; }
+    /* Tiempo total, al final de la línea y separado del resto. */
+    .etapa-tiempo {
+      margin-left: auto;
+      padding-left: .9rem;
+      font-size: .82rem;
+      color: #7b8794;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
     /* Utilitaria para esconder: con !important le gana a un display propio del
        elemento (si no, un `display` más específico lo deja siempre visible). */
     .oculto { display: none !important; }
@@ -150,7 +181,7 @@
 </head>
 <body>
   <header>
-    <h1>Informes de Liderazgo</h1>
+    <h1>Informes de Liderazgo <span class="version"><?= version ?></span></h1>
     <span class="usuario"><?= usuario ?></span>
   </header>
 
@@ -176,11 +207,12 @@
       <div class="acciones">
         <button id="generar" disabled>Generar informe</button>
         <div id="cargando" class="cargando oculto">
-          <div class="spinner"></div>
+          <div id="spinner" class="spinner"></div>
           <div class="proceso">
             <div id="etapas" class="etapas"></div>
             <span id="etapa-nombre" class="etapa-nombre">Empezando…</span>
             <span id="etapa-contador" class="etapa-contador"></span>
+            <span id="etapa-tiempo" class="etapa-tiempo"></span>
           </div>
         </div>
       </div>
@@ -379,25 +411,70 @@
     let sondeo = null;
     let sondeoEnVuelo = false;
 
+    // Los puntos son las etapas del servidor más uno final, "Finalizado", que no
+    // es trabajo sino el estado terminal: por eso lo agrega la interfaz y no
+    // Progreso.gs. Queda en pantalla al terminar, junto con el tiempo total.
+    const ETAPA_FINAL = ETAPAS.length;
+
+    /** Dibuja los puntos unidos por tramos, como una línea de tiempo. */
     function dibujarEtapas() {
-      $('etapas').replaceChildren(...ETAPAS.map(() => {
+      const partes = [];
+      for (let i = 0; i <= ETAPA_FINAL; i++) {
+        if (i > 0) {
+          const union = document.createElement('div');
+          union.className = 'union';
+          partes.push(union);
+        }
         const punto = document.createElement('div');
         punto.className = 'etapa';
-        return punto;
-      }));
+        partes.push(punto);
+      }
+      $('etapas').replaceChildren(...partes);
+    }
+
+    /** Los puntos y los tramos, por separado: el DOM los tiene intercalados. */
+    function piezasDeLaLinea() {
+      const hijos = [...$('etapas').children];
+      return {
+        puntos: hijos.filter((h) => h.classList.contains('etapa')),
+        uniones: hijos.filter((h) => h.classList.contains('union')),
+      };
     }
 
     /** Marca la etapa en curso. `indice` -1 deja todo apagado. */
     function pintarEtapa(indice, nombre) {
-      [...$('etapas').children].forEach((punto, i) => {
+      const { puntos, uniones } = piezasDeLaLinea();
+      const terminado = indice >= ETAPA_FINAL;
+      puntos.forEach((punto, i) => {
         punto.className = 'etapa'
           + (i < indice ? ' hecha' : '')
-          + (i === indice ? ' actual' : '');
+          + (i === indice ? (terminado ? ' final' : ' actual') : '');
       });
+      // El tramo se pinta cuando la etapa de su izquierda ya pasó.
+      uniones.forEach((union, i) => {
+        union.className = 'union' + (i < indice ? ' hecha' : '');
+      });
+
       $('etapa-nombre').textContent = nombre || 'Empezando…';
-      $('etapa-contador').textContent = indice >= 0
+      $('etapa-contador').textContent = (indice >= 0 && !terminado)
         ? '(' + (indice + 1) + ' de ' + ETAPAS.length + ')'
         : '';
+    }
+
+    /** 72.4 → "1 m 12 s"; 18.3 → "18,3 s". Sin decimales cuando no aportan. */
+    function tiempoLegible(segundos) {
+      const total = Number(segundos);
+      if (!isFinite(total)) return '';
+      if (total < 60) return String(total).replace('.', ',') + ' s';
+      const minutos = Math.floor(total / 60);
+      return minutos + ' m ' + Math.round(total - minutos * 60) + ' s';
+    }
+
+    /** Deja la línea completa en pantalla, con el tiempo total a la derecha. */
+    function marcarFinalizado(segundos) {
+      pintarEtapa(ETAPA_FINAL, 'Finalizado');
+      $('spinner').classList.add('oculto');
+      $('etapa-tiempo').textContent = tiempoLegible(segundos);
     }
 
     function empezarSondeo(token) {
@@ -432,6 +509,9 @@
 
       $('generar').disabled = true;
       $('cargando').classList.remove('oculto');
+      // La línea de la corrida anterior queda en pantalla: hay que reiniciarla.
+      $('spinner').classList.remove('oculto');
+      $('etapa-tiempo').textContent = '';
       $('resultado').replaceChildren();
 
       // Identifica a esta corrida para poder pedirle el avance. No lleva datos
@@ -443,13 +523,24 @@
         .withSuccessHandler((r) => {
           pararSondeo();
           $('generar').disabled = false;
-          $('cargando').classList.add('oculto');
+          // La línea NO se esconde: queda completa, con "Finalizado" y el tiempo
+          // total, como registro de lo que acaba de pasar.
+          marcarFinalizado(r.segundos);
           const link = document.createElement('a');
           link.href = r.informeUrl;
           link.target = '_blank';
           link.rel = 'noopener';
           link.textContent = r.nombreArchivo;
-          mostrarAviso('ok', ['Informe listo en ' + r.segundos + ' s: ', link]);
+          mostrarAviso('ok', ['Informe listo: ', link]);
+          // Si el punto 5 salió con el texto determinista, decirlo y decir por
+          // qué: un informe pobre en silencio obliga a adivinar la causa.
+          if (r.sintesisAsistida === false) {
+            const nota = document.createElement('div');
+            nota.className = 'aviso error';
+            nota.textContent = 'Ojo: el punto 5 salió con el texto básico porque no se pudo '
+              + 'redactar la síntesis — ' + (r.sintesisMotivo || 'motivo no informado') + '.';
+            $('resultado').appendChild(nota);
+          }
           $('evaluado').value = '';
           cargarHistorial();
         })

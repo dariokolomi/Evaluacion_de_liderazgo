@@ -125,7 +125,7 @@ function cargarGs(globales) {
   return new Function(
     ...nombres,
     `${fuente}\nreturn { doGet, listarPlanillas, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml,
-       progresoDeInforme, marcarEtapa, limpiarProgreso, ETAPAS_INFORME };`
+       progresoDeInforme, marcarEtapa, limpiarProgreso, ETAPAS_INFORME, VERSION_APP };`
   )(...nombres.map((n) => globales[n]));
 }
 
@@ -283,6 +283,23 @@ function main() {
     !intentar(() => gsRoto.limpiarProgreso('tok')).error);
   revisar('si el Cache falla, el progreso se informa como desconocido',
     intentar(() => gsRoto.progresoDeInforme('tok')).valor === null);
+
+  // ── Versión visible ──────────────────────────────────────────────
+  // Se muestra para poder distinguir "el código nuevo falla" de "el navegador
+  // está sirviendo un deployment viejo", que es lo que costó diagnosticar una vez.
+  revisar('la versión sigue el esquema vN.M, con M entre 1 y 99',
+    /^v[1-9]\d*\.([1-9]|[1-9]\d)$/.test(gsProg.VERSION_APP), gsProg.VERSION_APP);
+
+  const conVersion = crearEntorno();
+  const gsVersion = cargarGs(conVersion.globales);
+  gsVersion.doGet();
+  revisar('doGet le pasa la versión a la interfaz',
+    conVersion.registro.plantillaObj
+      && conVersion.registro.plantillaObj.version === gsVersion.VERSION_APP,
+    String(conVersion.registro.plantillaObj && conVersion.registro.plantillaObj.version));
+  revisar('la versión va también en el título de la pestaña',
+    (conVersion.registro.titulo || '').indexOf(gsVersion.VERSION_APP) > 0,
+    conVersion.registro.titulo);
 
   // La interfaz recibe los nombres de las etapas del servidor: una sola lista.
   gsProg.doGet();
