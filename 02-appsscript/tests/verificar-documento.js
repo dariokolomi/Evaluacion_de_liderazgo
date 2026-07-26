@@ -111,6 +111,15 @@ function main() {
     }
     for (let i = 0; i < Math.min(esperado.length, obtenido.length); i++) {
       const antes = diferencias.length;
+      // El radar ahora ocupa el ancho útil de la página, así que sus dimensiones
+      // ya no coinciden con el PNG de Python a propósito: se verifica que haya
+      // una imagen, no su tamaño.
+      if (esperado[i] && esperado[i].tipo === 'imagen') {
+        if (!obtenido[i] || obtenido[i].tipo !== 'imagen') {
+          diferencias.push(`bloque[${i}]: se esperaba una imagen, js=${resumir(obtenido[i])}`);
+        }
+        continue;
+      }
       comparar(`bloque[${i}]`, esperado[i], obtenido[i], diferencias);
       if (diferencias.length > antes) {
         diferencias.splice(antes, 0, `  ↳ ${resumir(esperado[i])}`);

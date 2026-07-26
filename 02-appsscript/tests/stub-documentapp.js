@@ -63,6 +63,17 @@ class Celda {
       setForegroundColor(v) { celda.color = v; return this; },
     };
   }
+  /** La celda es un solo párrafo; alcanza para que centrarCelda() funcione. */
+  getNumChildren() { return 1; }
+  getChild() {
+    const celda = this;
+    return {
+      getType: () => 'PARAGRAPH',
+      asParagraph: () => ({
+        setAlignment(alineacion) { celda.centrado = alineacion === 'CENTER'; return this; },
+      }),
+    };
+  }
 }
 
 class Tabla {
@@ -100,6 +111,10 @@ class Body {
     this.bloques = [new Parrafo()];
     return this;
   }
+  // Como un Doc nuevo: Carta (612 pt) con márgenes de 72 pt → 468 pt útiles.
+  getPageWidth() { return 612; }
+  getMarginLeft() { return 72; }
+  getMarginRight() { return 72; }
   getNumChildren() { return this.bloques.length; }
   getChild(indice) {
     const bloque = this.bloques[indice];

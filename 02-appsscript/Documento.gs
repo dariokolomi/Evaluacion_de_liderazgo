@@ -15,7 +15,11 @@ var VERDE_SUAVE = '#E2EFDA';
 var NARANJA_SUAVE = '#FCE4D6';
 var BLANCO = '#FFFFFF';
 
-var ANCHO_GRAFICO_PT = 432; // 6 pulgadas, como Inches(6.0) en el original
+// Ancho útil de una página A4 (595 pt) con márgenes de 72 pt: 595 - 2×72 ≈ 451.
+// Se fija en vez de calcularlo con getPageWidth()/getMargin*(): en el documento
+// recién creado esos valores no están asentados y devolvían un ancho más chico
+// que el real, encogiendo el gráfico. A4 es el tamaño del Workspace (es-AR).
+var ANCHO_GRAFICO_PT = 451;
 var SANGRIA_VINETA_PT = 14.173228; // Cm(0.5)
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -56,7 +60,18 @@ function ponerCelda(tabla, fila, columna, texto, opciones) {
   var t = celda.editAsText();
   t.setBold(!!o.negrita);
   t.setFontSize(o.tamano || 10);
+  if (o.centrado) centrarCelda(celda);
   return celda;
+}
+
+/** La alineación vive en el/los párrafo(s) de la celda, no en la celda misma. */
+function centrarCelda(celda) {
+  for (var i = 0; i < celda.getNumChildren(); i++) {
+    var hijo = celda.getChild(i);
+    if (hijo.getType() === DocumentApp.ElementType.PARAGRAPH) {
+      hijo.asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    }
+  }
 }
 
 function pintarCelda(tabla, fila, columna, color) {
@@ -67,8 +82,12 @@ function pintarCelda(tabla, fila, columna, color) {
  * Crea la tabla con su encabezado ya formateado.
  * @param {Array<string>} encabezados
  * @param {Array<Array<string>>} filas contenido, sin el encabezado
+ * @param {Array<number>} [columnasCentradas] índices de columna a centrar
+ *   (encabezado y cuerpo): las de valores numéricos y códigos. Las columnas de
+ *   texto —nombre de la dimensión, interpretación— se dejan a la izquierda.
  */
-function agregarTabla(body, encabezados, filas) {
+function agregarTabla(body, encabezados, filas, columnasCentradas) {
+  var centradas = columnasCentradas || [];
   var tabla = body.appendTable([encabezados].concat(filas));
   for (var c = 0; c < encabezados.length; c++) {
     var celda = tabla.getCell(0, c);
@@ -77,10 +96,11 @@ function agregarTabla(body, encabezados, filas) {
     t.setBold(true);
     t.setForegroundColor(BLANCO);
     t.setFontSize(10);
+    if (centradas.indexOf(c) >= 0) centrarCelda(celda);
   }
   for (var f = 1; f <= filas.length; f++) {
     for (var col = 0; col < encabezados.length; col++) {
-      ponerCelda(tabla, f, col, filas[f - 1][col]);
+      ponerCelda(tabla, f, col, filas[f - 1][col], { centrado: centradas.indexOf(col) >= 0 });
     }
   }
   return tabla;
@@ -162,7 +182,7 @@ function seccionCuantitativa(body, neo, cel, celv, cam, camv, pot, potv, con, co
       NEO_INTERPRETACION_BREVE[d]
     ];
   });
-  var tabla = agregarTabla(body, ['Dimensión', 'Puntaje Directo / T', 'Nivel', 'Interpretación Tendencial'], filasNeo);
+  var tabla = agregarTabla(body, ['Dimensión', 'Puntaje Directo / T', 'Nivel', 'Interpretación Tendencial'], filasNeo, [1, 2]);
   dims.forEach(function (d, i) {
     ponerCelda(tabla, i + 1, 0, NEO_NOMBRES_TABLA[d], { negrita: true });
     ponerCelda(tabla, i + 1, 2, neo.nivel[d], { negrita: true });
@@ -186,7 +206,7 @@ function seccionCuantitativa(body, neo, cel, celv, cam, camv, pot, potv, con, co
     ['TRANSACCIONAL – Total', dec(celv.TransTot), pct(cel.TransTot), nivelPorPercentil(cel.TransTot)],
     ['LAISSEZ-FAIRE', dec(celv.Laissez), pct(cel.Laissez), nivelPorPercentil(cel.Laissez)]
   ];
-  tabla = agregarTabla(body, ['Dimensión', 'Media', 'Percentil', 'Nivel'], filasCelid);
+  tabla = agregarTabla(body, ['Dimensión', 'Media', 'Percentil', 'Nivel'], filasCelid, [1, 2, 3]);
   filasCelid.forEach(function (fila, i) {
     var esTotal = fila[0].indexOf('Total') >= 0 || fila[0].indexOf('LAISSEZ') >= 0;
     ponerCelda(tabla, i + 1, 0, fila[0], { negrita: esTotal });
@@ -209,7 +229,7 @@ function seccionCuantitativa(body, neo, cel, celv, cam, camv, pot, potv, con, co
     ['Liderazgo Participativo', String(camv.Part), pct(cam.Part), nivelPorPercentil(cam.Part)],
     ['Liderazgo Orientado a Metas', String(camv.Or), pct(cam.Or), nivelPorPercentil(cam.Or)]
   ];
-  tabla = agregarTabla(body, ['Estilo', 'Puntaje Directo', 'Percentil', 'Nivel'], filasCamin);
+  tabla = agregarTabla(body, ['Estilo', 'Puntaje Directo', 'Percentil', 'Nivel'], filasCamin, [1, 2, 3]);
   pintarNivelesDeFilas(tabla, filasCamin);
   body.appendParagraph('');
 
@@ -222,7 +242,7 @@ function seccionCuantitativa(body, neo, cel, celv, cam, camv, pot, potv, con, co
     ['Motivación Extrínseca', String(potv.Extr), pct(pot.Extr), nivelPorPercentil(pot.Extr)],
     ['Motivación Social Normativa', String(potv.Soc), pct(pot.Soc), nivelPorPercentil(pot.Soc)]
   ];
-  tabla = agregarTabla(body, ['Dimensión', 'Puntaje Directo', 'Percentil', 'Nivel'], filasPoten);
+  tabla = agregarTabla(body, ['Dimensión', 'Puntaje Directo', 'Percentil', 'Nivel'], filasPoten, [1, 2, 3]);
   pintarNivelesDeFilas(tabla, filasPoten);
   body.appendParagraph('');
 
@@ -235,7 +255,7 @@ function seccionCuantitativa(body, neo, cel, celv, cam, camv, pot, potv, con, co
     ['Orientadas a las Relaciones', String(conv.Rel), pct(con.Rel), nivelPorPercentil(con.Rel)],
     ['Orientadas al Cambio', String(conv.Camb), pct(con.Camb), nivelPorPercentil(con.Camb)]
   ];
-  tabla = agregarTabla(body, ['Categoría conductual', 'Puntaje Directo', 'Percentil', 'Nivel'], filasConlid);
+  tabla = agregarTabla(body, ['Categoría conductual', 'Puntaje Directo', 'Percentil', 'Nivel'], filasConlid, [1, 2, 3]);
   pintarNivelesDeFilas(tabla, filasConlid);
 }
 
@@ -343,7 +363,8 @@ function seccionGrafico(body, nombre, imagenRadar, cel, cam, con) {
   body.appendParagraph('');
 
   var imagen = body.appendImage(imagenRadar);
-  // setWidth solo deformaría la imagen: hay que escalar el alto en proporción.
+  // Ocupa el ancho útil de la página. setWidth solo deformaría: el alto se
+  // escala en proporción.
   var alto = Math.round(imagen.getHeight() * ANCHO_GRAFICO_PT / imagen.getWidth());
   imagen.setWidth(ANCHO_GRAFICO_PT);
   imagen.setHeight(alto);
