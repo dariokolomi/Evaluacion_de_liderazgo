@@ -1,12 +1,18 @@
 __pycache__/
 *.pyc
 
+# Lo deja macOS en cada carpeta que se abre en el Finder
+.DS_Store
+
 # Apunta al proyecto de Apps Script de cada uno
 02-appsscript/.clasp.json
 
 # Configuración local de Claude Code
 .claude/
 .claude.json
+
+# Registro local de las sesiones de Recall, en cualquier subdirectorio
+.recall/
 
 # Volcados del verificador: se regeneran y contienen respuestas de personas reales
 02-appsscript/tests/referencia-python.json
