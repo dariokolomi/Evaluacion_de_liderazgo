@@ -102,10 +102,11 @@ function sintesisValida() {
       { titulo: 'Conducción participativa', texto: 'Nivel alto de liderazgo participativo.' },
       { titulo: 'Interés genuino en el rol', texto: 'Motivación intrínseca en nivel alto.' },
     ],
+    // `dimension` declara en qué dato se apoya la brecha y no se imprime.
     areasDesarrollo: [
-      { titulo: 'Reconocimiento sistemático', texto: 'La recompensa contingente queda en nivel medio.' },
-      { titulo: 'Intervención ante desvíos', texto: 'Tendencia alta a la no-intervención.' },
-      { titulo: 'Seguimiento operativo', texto: 'Las conductas de tarea quedan en nivel medio.' },
+      { dimension: 'Recompensa Contingente', titulo: 'Reconocimiento sistemático', texto: 'La recompensa contingente queda en nivel medio.' },
+      { dimension: 'Laissez-Faire', titulo: 'Intervención ante desvíos', texto: 'Tendencia alta a la no-intervención.' },
+      { dimension: 'Conductas Orientadas a la Tarea', titulo: 'Seguimiento operativo', texto: 'Las conductas de tarea quedan en nivel medio.' },
     ],
     inferencias: [
       { titulo: 'Presencia afectiva y ausencia operativa', texto: 'Consideración en nivel alto conviviendo con no-intervención alta.' },
@@ -261,13 +262,13 @@ ok(!r.ok && /jerga/.test(r.motivo), 'se rechaza el nombre técnico del instrumen
 
 // ── Validación: lectura psicométrica de la motivación ──
 r = conCambio((s) => {
-  s.areasDesarrollo[0] = { titulo: 'Baja motivación extrínseca', texto: 'La motivación extrínseca queda en nivel medio.' };
+  s.areasDesarrollo[0] = { dimension: 'Motivación Extrínseca para liderar', titulo: 'Baja motivación extrínseca', texto: 'La motivación extrínseca queda en nivel medio.' };
 });
 ok(!r.ok && /extr/.test(r.motivo),
   'se rechaza la motivación extrínseca presentada como área de desarrollo', r.motivo);
 
 r = conCambio((s) => {
-  s.areasDesarrollo[0] = { titulo: 'Motivación social-normativa', texto: 'La social-normativa queda en nivel medio.' };
+  s.areasDesarrollo[0] = { dimension: 'Motivación Social-Normativa para liderar', titulo: 'Motivación social-normativa', texto: 'La social-normativa queda en nivel medio.' };
 });
 ok(!r.ok, 'se rechaza la motivación social-normativa como área de desarrollo', r.motivo);
 
@@ -344,6 +345,40 @@ r = conCambio((s) => {
 });
 ok(!r.ok && /Orientado a Metas/.test(r.motivo),
   'la síntesis completa rechaza un nivel mal atribuido', r.motivo);
+
+// ── La brecha declarada tiene que existir en el perfil ──
+// Es la única defensa que funcionó contra un error que el modelo repitió tres
+// veces: presentar como carencia una dimensión que está en nivel alto, sin
+// nombrarla y con otras palabras ("prioriza el consenso sobre la innovación" con
+// las conductas de cambio en alto). Ninguna validación de texto puede verlo.
+r = conCambio((s) => {
+  s.areasDesarrollo[0] = {
+    dimension: 'Liderazgo Orientado a Metas',
+    titulo: 'Enfoque en resultados',
+    texto: 'Prioriza el bienestar relacional sobre el logro de objetivos concretos.',
+  };
+});
+ok(!r.ok && /Orientado a Metas/.test(r.motivo),
+  'se rechaza una brecha apoyada en una dimensión que está en nivel alto', r.motivo);
+
+r = conCambio((s) => {
+  s.areasDesarrollo[0] = {
+    dimension: 'Conductas Orientadas al Cambio',
+    titulo: 'Impulso al cambio',
+    texto: 'Prioriza el consenso sobre la innovación.',
+  };
+});
+ok(!r.ok, 'y también cuando el modelo mueve el error a otra dimensión alta', r.motivo);
+
+r = conCambio((s) => { s.areasDesarrollo[0].dimension = 'Fortaleza inventada'; });
+ok(!r.ok, 'se rechaza una dimensión que no existe en el perfil', r.motivo);
+
+r = conCambio((s) => { s.areasDesarrollo[0].dimension = 'Laissez-Faire'; });
+ok(r.ok, 'una dimensión invertida en nivel alto SÍ puede sostener una brecha', r.motivo);
+
+r = conCambio((s) => { delete s.areasDesarrollo[1].dimension; });
+ok(!r.ok && /dimension/.test(r.motivo),
+  'se rechaza un área de desarrollo que no declara de dónde sale', r.motivo);
 
 // ── Validación por bloque ──
 ok(gs.validarBloque(gs.SINTESIS_BLOQUE_DESCRIPTIVO, bloqueDescriptivo(), perfil).ok,

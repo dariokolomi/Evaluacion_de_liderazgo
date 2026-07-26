@@ -173,7 +173,9 @@ var SINTESIS_ESPERA_NIVEL_ALTO = ['Carisma', 'EstimInt', 'Dir', 'Tar'];
 /** Campos obligatorios de cada lista de la síntesis. */
 var SINTESIS_LISTAS = {
   fortalezas: ['titulo', 'texto'],
-  areasDesarrollo: ['titulo', 'texto'],
+  // `dimension` no se imprime: es la declaración de en qué dato se apoya la
+  // brecha, y permite verificarla. Ver validarBrechasDeclaradas.
+  areasDesarrollo: ['dimension', 'titulo', 'texto'],
   inferencias: ['titulo', 'texto'],
   recomendaciones: ['titulo', 'contexto', 'accion'],
   pendienteDefinir: ['titulo', 'texto']
@@ -300,6 +302,44 @@ function agrupadoPorNivel(perfil) {
   return lineas.join('\n');
 }
 
+/**
+ * Las dimensiones de las que puede salir un área de desarrollo: las que NO están
+ * en nivel alto, más las invertidas altas, donde alto es justamente el problema.
+ *
+ * Es una lista de lo permitido y no de lo prohibido a propósito. Prohibir no
+ * alcanzó: con la orientación a metas en nivel alto, el informe escribió que la
+ * persona "prioriza el bienestar relacional sobre el logro de metas concretas";
+ * al nombrarle esa dimensión como intocable, el modelo movió el mismo error a las
+ * conductas de cambio —también altas— con otras palabras. La validación de niveles
+ * no ve ninguno de los dos casos porque no citan la dimensión junto a un nivel.
+ * Acotar de dónde puede elegir es más difícil de eludir que enumerar qué no hacer.
+ */
+function dimensionesConBrecha(perfil) {
+  var candidatas = perfil.dimensiones.filter(function (d) {
+    return d.invertida ? d.nivel === 'Alto' : d.nivel !== 'Alto';
+  });
+  // Los rasgos de personalidad fuera del promedio también pueden sostener una
+  // brecha; el neuroticismo alto es el caso típico.
+  perfil.neo.forEach(function (d) {
+    if (d.nivel !== 'Promedio') candidatas.push(d);
+  });
+  return candidatas;
+}
+
+/** Los nombres solamente, para validar lo que el modelo declara. */
+function nombresConBrecha(perfil) {
+  return dimensionesConBrecha(perfil).map(function (d) { return d.dimension; });
+}
+
+function brechasDisponibles(perfil) {
+  var lineas = dimensionesConBrecha(perfil).map(function (d) {
+    return d.dimension + (d.invertida
+      ? ' (acá el nivel alto ES la brecha)'
+      : ' (nivel ' + d.nivel + ')');
+  });
+  return lineas.length ? '  - ' + lineas.join('\n  - ') : '  (el perfil no muestra brechas)';
+}
+
 /** Los datos del perfil, tal como los ve el modelo. Iguales en los dos bloques. */
 function datosDelPerfil(nombre, perfil) {
   var lineas = perfil.dimensiones.map(function (d) {
@@ -367,7 +407,9 @@ function reglasComunes() {
     '3. Si una afirmación no se apoya en un dato, no la escribas.',
     '4. Escribí en español rioplatense profesional, en tercera persona, sin tutear a',
     '   la persona evaluada y sin suponer su género: usá el nombre o construcciones',
-    '   neutras. Tono descriptivo y respetuoso, nunca lapidario.',
+    '   neutras. Tono descriptivo y respetuoso, nunca lapidario. Todo en castellano:',
+    '   ni una palabra en inglés (escribí "cuestionar", no "challenger"). Revisá la',
+    '   concordancia de los verbos antes de cerrar cada oración.',
     '5. Nada de jerga técnica. La persona evaluada lee este texto: no escribas',
     '   "escala invertida", "percentil válido", "referencia orientativa" ni las',
     '   siglas de los cuestionarios usados. Nombrá las dimensiones por su nombre y',
@@ -416,8 +458,13 @@ function mensajesBloqueDescriptivo(nombre, perfil) {
     '{',
     '  "resumenGeneral": "...",',
     '  "fortalezas":      [{"titulo": "...", "texto": "..."}],',
-    '  "areasDesarrollo": [{"titulo": "...", "texto": "..."}]',
+    '  "areasDesarrollo": [{"dimension": "...", "titulo": "...", "texto": "..."}]',
     '}',
+    '',
+    'En cada área de desarrollo, "dimension" es el nombre EXACTO, copiado tal cual,',
+    'de la dimensión de la lista de abajo en la que se apoya esa brecha. No se',
+    'imprime en el informe: sirve para verificar que la brecha exista en el dato.',
+    'Si no podés copiar un nombre de esa lista, entonces esa brecha no existe.',
     '',
     'El "resumenGeneral" retrata a la persona, no enumera dimensiones. Tiene que',
     'poder leerse como la descripción de alguien: cómo conduce, en qué se apoya y',
@@ -436,7 +483,17 @@ function mensajesBloqueDescriptivo(nombre, perfil) {
     'Títulos de 3 a 6 palabras, sin números adentro.',
     '',
     'En "areasDesarrollo" van brechas reales sostenidas por el dato. Está PROHIBIDO',
-    'incluir ahí la motivación extrínseca o la social-normativa.'
+    'incluir ahí la motivación extrínseca o la social-normativa.',
+    '',
+    '',
+    'LAS ÚNICAS BRECHAS QUE PODÉS USAR son éstas. No hay otras: todo lo que no',
+    'figure en esta lista está en nivel alto y es una fortaleza de esta persona.',
+    brechasDisponibles(perfil),
+    'Elegí tres de ahí. Está prohibido presentar como carencia algo que no esté en',
+    'esa lista, ni directamente, ni con otras palabras, ni cambiándole el nombre.',
+    'Concretamente: si la orientación a metas o las conductas de cambio no aparecen',
+    'arriba, entonces NO escribas que descuida los objetivos, ni que prioriza el',
+    'consenso sobre la innovación, ni nada equivalente. El dato dice lo contrario.'
   ]).join('\n');
 
   return [
@@ -709,6 +766,35 @@ function validarNivelesCoherentes(texto, perfil) {
 }
 
 /**
+ * Que cada área de desarrollo declare una dimensión que realmente tenga brecha.
+ *
+ * Es la única defensa que funcionó contra un error que el modelo repitió en tres
+ * corridas: presentar como carencia una dimensión que está en nivel alto, sin
+ * nombrarla y con otras palabras. "Prioriza el bienestar relacional sobre el logro
+ * de metas concretas" con la orientación a metas en alto; y cuando se le prohibió
+ * esa, "priorizar el consenso sobre la innovación" con las conductas de cambio,
+ * también altas. Ninguna validación de texto lo ve, porque no hay dimensión ni
+ * nivel citados: es una paráfrasis.
+ *
+ * Pedirle que declare de dónde sale la brecha convierte el problema en algo
+ * verificable. El campo no se imprime en el informe.
+ */
+function validarBrechasDeclaradas(areasDesarrollo, perfil) {
+  var permitidas = nombresConBrecha(perfil);
+  for (var i = 0; i < (areasDesarrollo || []).length; i++) {
+    var declarada = areasDesarrollo[i].dimension;
+    if (permitidas.indexOf(declarada) < 0) {
+      return {
+        ok: false,
+        motivo: 'presenta "' + declarada + '" como área de desarrollo, y esa dimensión'
+          + ' no tiene brecha en este perfil'
+      };
+    }
+  }
+  return { ok: true, motivo: '' };
+}
+
+/**
  * La motivación extrínseca y la social-normativa bajas no son una brecha: si
  * aparecen como área de desarrollo, la lectura psicométrica está mal.
  */
@@ -737,6 +823,8 @@ function validarBloque(bloque, datos, perfil) {
   if (datos.areasDesarrollo) {
     var motivacion = validarLecturaMotivacion(datos.areasDesarrollo);
     if (!motivacion.ok) return motivacion;
+    var brechas = validarBrechasDeclaradas(datos.areasDesarrollo, perfil);
+    if (!brechas.ok) return brechas;
   }
   return { ok: true, motivo: '' };
 }
@@ -758,7 +846,10 @@ function validarSintesis(sintesis, perfil) {
   var niveles = validarNivelesCoherentes(texto, perfil);
   if (!niveles.ok) return niveles;
 
-  return validarLecturaMotivacion(sintesis.areasDesarrollo);
+  var motivacion = validarLecturaMotivacion(sintesis.areasDesarrollo);
+  if (!motivacion.ok) return motivacion;
+
+  return validarBrechasDeclaradas(sintesis.areasDesarrollo, perfil);
 }
 
 /** Todo el texto de una síntesis o de un bloque, para revisar jerga y citas. */
