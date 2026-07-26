@@ -149,6 +149,20 @@ var SINTESIS_JERGA_PROHIBIDA = [
 ];
 
 /**
+ * Marcador que ocupa el lugar del nombre en el pedido al LLM.
+ *
+ * El nombre de la persona NO sale del proyecto. Antes el prompt llevaba
+ * "PERSONA EVALUADA: <nombre>" junto al perfil psicométrico completo, así que a la
+ * API de un tercero le llegaba un dato identificatorio pegado a una evaluación
+ * que termina en un legajo. El modelo sólo lo necesita para redactar, no para
+ * razonar: se le da un marcador y el nombre se pone acá, al armar el informe.
+ *
+ * Lo que sigue saliendo son los niveles por dimensión, que es el mínimo que la
+ * función necesita para existir.
+ */
+var SINTESIS_MARCADOR_NOMBRE = '[NOMBRE]';
+
+/**
  * Dimensiones donde un percentil alto es lo indeseable.
  * Sin esto el modelo lee "Laissez-Faire P90" como una fortaleza.
  */
@@ -340,8 +354,9 @@ function brechasDisponibles(perfil) {
   return lineas.length ? '  - ' + lineas.join('\n  - ') : '  (el perfil no muestra brechas)';
 }
 
-/** Los datos del perfil, tal como los ve el modelo. Iguales en los dos bloques. */
-function datosDelPerfil(nombre, perfil) {
+/** Los datos del perfil, tal como los ve el modelo. Iguales en los dos bloques.
+ *  No recibe el nombre a propósito: ver SINTESIS_MARCADOR_NOMBRE. */
+function datosDelPerfil(perfil) {
   var lineas = perfil.dimensiones.map(function (d) {
     // Ni el instrumento, ni la expresión "escala invertida", ni ningún número:
     // el modelo copia el vocabulario del input. Medido, repetía "escala
@@ -361,7 +376,9 @@ function datosDelPerfil(nombre, perfil) {
   });
 
   return [
-    'PERSONA EVALUADA: ' + nombre,
+    'PERSONA EVALUADA: no se informa su nombre. Cada vez que necesites nombrarla,',
+    'escribí exactamente ' + SINTESIS_MARCADOR_NOMBRE + ', con los corchetes. No',
+    'inventes un nombre ni uses uno de ejemplo.',
     '',
     'NIVEL POR DIMENSIÓN DE LIDERAZGO (Alto, Medio o Bajo):',
     lineas.join('\n'),
@@ -498,7 +515,7 @@ function mensajesBloqueDescriptivo(nombre, perfil) {
 
   return [
     { role: 'system', content: LLM_SISTEMA_THINKING + '\n\n' + instrucciones },
-    { role: 'user', content: datosDelPerfil(nombre, perfil) }
+    { role: 'user', content: datosDelPerfil(perfil) }
   ];
 }
 
@@ -574,7 +591,7 @@ function mensajesBloqueAnalitico(nombre, perfil, previo) {
     'Títulos de 3 a 7 palabras, sin números adentro.'
   ]);
 
-  var datos = datosDelPerfil(nombre, perfil);
+  var datos = datosDelPerfil(perfil);
   if (previo) {
     var titulos = []
       .concat((previo.fortalezas || []).map(function (f) { return f.titulo; }))
@@ -852,6 +869,29 @@ function validarSintesis(sintesis, perfil) {
   return validarBrechasDeclaradas(sintesis.areasDesarrollo, perfil);
 }
 
+/**
+ * Pone el nombre real donde el modelo dejó el marcador.
+ *
+ * Se hace acá, ya de vuelta en el proyecto, para que el nombre no tenga que salir
+ * en el pedido. Si el modelo no usó el marcador —suele escribir "la persona
+ * evaluada"— no hay nada que reemplazar y el texto queda igual de válido.
+ */
+function ponerNombre(datos, nombre) {
+  var reemplazar = function (texto) {
+    return typeof texto === 'string' ? texto.split(SINTESIS_MARCADOR_NOMBRE).join(nombre) : texto;
+  };
+  datos.resumenGeneral = reemplazar(datos.resumenGeneral);
+  for (var lista in SINTESIS_LISTAS) {
+    if (!Object.prototype.hasOwnProperty.call(SINTESIS_LISTAS, lista)) continue;
+    (datos[lista] || []).forEach(function (item) {
+      SINTESIS_LISTAS[lista].forEach(function (campo) {
+        item[campo] = reemplazar(item[campo]);
+      });
+    });
+  }
+  return datos;
+}
+
 /** Todo el texto de una síntesis o de un bloque, para revisar jerga y citas. */
 function textoDeSintesis(datos) {
   var partes = [datos.resumenGeneral];
@@ -1032,5 +1072,5 @@ function sintesisDeLiderazgo(nombre, resultados, avisar) {
   }
 
   sintesis.modelo = modelo;
-  return { sintesis: sintesis, motivo: '' };
+  return { sintesis: ponerNombre(sintesis, nombre), motivo: '' };
 }

@@ -31,7 +31,7 @@ var TITULO = 'Informes de Liderazgo — CCHH';
  * mismo que un despliegue, y un número que se mueve sin que nadie lo decida no
  * sirve para hablar de "la 2.4".
  */
-var VERSION_APP = 'v2.4';
+var VERSION_APP = 'v2.6';
 
 var LIMITE_HISTORIAL_COMPLETO = 5000;
 

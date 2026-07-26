@@ -45,7 +45,7 @@ function cargarGs(propiedades, fetchSimulado) {
     `${fuente}\nreturn { corregir, perfilParaSintesis, validarSintesis, validarBloque,
       mensajesBloqueDescriptivo, mensajesBloqueAnalitico, jsonDeRespuesta,
       percentilesCitados, puntajesTCitados, sintesisDeLiderazgo, nivelPorPercentil,
-      validarNivelesCoherentes,
+      validarNivelesCoherentes, ponerNombre, SINTESIS_MARCADOR_NOMBRE,
       SINTESIS_BLOQUE_DESCRIPTIVO, SINTESIS_BLOQUE_ANALITICO };`
   )(PropertiesService, UrlFetchApp, consolaMuda);
 }
@@ -173,7 +173,8 @@ const mAnal = gs.mensajesBloqueAnalitico('Fran prueba', perfil, bloqueDescriptiv
     `el bloque ${nombre} son dos mensajes, sistema y usuario`);
   ok(m[0].content.indexOf('/no_think') === 0,
     `el bloque ${nombre} arranca apagando el razonamiento del modelo`);
-  ok(m[1].content.indexOf('Fran prueba') >= 0, `el nombre llega al bloque ${nombre}`);
+  ok(m[1].content.indexOf('Fran prueba') < 0,
+    `el nombre NO llega al bloque ${nombre}: no sale del proyecto`);
   // Los números NO llegan al prompt: es la garantía más fuerte de que el modelo
   // no los escriba, por lo mismo que con "escala invertida" y "NEO-FFI".
   ok(!/\bP\d{1,2}\b/.test(m[1].content),
@@ -198,6 +199,36 @@ const mAnal = gs.mensajesBloqueAnalitico('Fran prueba', perfil, bloqueDescriptiv
   ok(/PROHIBIDO/.test(m[0].content),
     `el bloque ${nombre} lleva la regla de lectura de la motivación`);
 });
+
+// ── El nombre de la persona no sale del proyecto ──
+// Antes el prompt llevaba "PERSONA EVALUADA: <nombre>" junto al perfil
+// psicométrico completo, o sea un dato identificatorio pegado a una evaluación que
+// termina en un legajo, saliendo a la API de un tercero.
+const mPriv = gs.mensajesBloqueDescriptivo('Fran Kolomi', perfil);
+const mPrivA = gs.mensajesBloqueAnalitico('Fran Kolomi', perfil, bloqueDescriptivo());
+[['descriptivo', mPriv], ['analítico', mPrivA]].forEach(([nombre, m]) => {
+  const todo = m.map((x) => x.content).join(' ');
+  ok(todo.indexOf('Fran') < 0 && todo.indexOf('Kolomi') < 0,
+    `el nombre de la persona no viaja en el bloque ${nombre}`);
+  ok(todo.indexOf(gs.SINTESIS_MARCADOR_NOMBRE) >= 0,
+    `el bloque ${nombre} le da al modelo el marcador para nombrarla`);
+});
+
+// Y el nombre se pone de vuelta al armar el informe.
+const conMarcador = sintesisValida();
+conMarcador.resumenGeneral = gs.SINTESIS_MARCADOR_NOMBRE + ' conduce con eje en las personas.';
+conMarcador.fortalezas[0].texto = 'A ' + gs.SINTESIS_MARCADOR_NOMBRE + ' le sale escuchar.';
+const conNombre = gs.ponerNombre(conMarcador, 'Fran Kolomi');
+ok(conNombre.resumenGeneral.indexOf('Fran Kolomi conduce') === 0,
+  'el nombre real reemplaza al marcador en el resumen', conNombre.resumenGeneral);
+ok(conNombre.fortalezas[0].texto.indexOf('A Fran Kolomi le sale') === 0,
+  'y también dentro de las listas', conNombre.fortalezas[0].texto);
+ok(JSON.stringify(conNombre).indexOf(gs.SINTESIS_MARCADOR_NOMBRE) < 0,
+  'no queda ningún marcador sin reemplazar');
+
+const sinMarcador = gs.ponerNombre(sintesisValida(), 'Fran Kolomi');
+ok(sinMarcador.resumenGeneral.indexOf('Fran Kolomi') < 0,
+  'si el modelo no usó el marcador, el texto queda intacto');
 
 // Cada bloque pide lo suyo y nada más: es lo que mantiene las llamadas cortas.
 ok(/PRIMERA de dos partes/.test(mDesc[0].content), 'el primer bloque se declara como primera parte');
