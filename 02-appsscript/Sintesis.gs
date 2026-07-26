@@ -266,6 +266,40 @@ function dimensionesDestacadas(dimensiones) {
   };
 }
 
+/**
+ * El perfil listado por nivel en vez de por instrumento.
+ *
+ * Es información redundante con la lista principal, y está a propósito: el modelo
+ * atribuía el nivel de una dimensión a otra de nombre parecido. Leer "en nivel
+ * Alto están: …" es mucho más difícil de confundir que buscar cada dimensión en
+ * una lista de diecinueve.
+ */
+function agrupadoPorNivel(perfil) {
+  var orden = ['Alto', 'Medio', 'Bajo'];
+  var grupos = {};
+  perfil.dimensiones.forEach(function (d) {
+    if (!grupos[d.nivel]) grupos[d.nivel] = [];
+    grupos[d.nivel].push(d.dimension + (d.invertida ? ' (acá alto es lo indeseable)' : ''));
+  });
+  var lineas = [];
+  orden.forEach(function (nivel) {
+    if (grupos[nivel] && grupos[nivel].length) {
+      lineas.push('- En nivel ' + nivel + ': ' + grupos[nivel].join('; ') + '.');
+    }
+  });
+
+  var porNeo = {};
+  perfil.neo.forEach(function (d) {
+    if (!porNeo[d.nivel]) porNeo[d.nivel] = [];
+    porNeo[d.nivel].push(d.dimension);
+  });
+  for (var nivelNeo in porNeo) {
+    if (!Object.prototype.hasOwnProperty.call(porNeo, nivelNeo)) continue;
+    lineas.push('- Personalidad en nivel ' + nivelNeo + ': ' + porNeo[nivelNeo].join('; ') + '.');
+  }
+  return lineas.join('\n');
+}
+
 /** Los datos del perfil, tal como los ve el modelo. Iguales en los dos bloques. */
 function datosDelPerfil(nombre, perfil) {
   var lineas = perfil.dimensiones.map(function (d) {
@@ -299,7 +333,17 @@ function datosDelPerfil(nombre, perfil) {
     'nivel, así que este orden te dice cuáles pesan más y cuáles menos. Usalo para',
     'elegir de qué hablar y para encontrar tensiones, sin mencionarlo como ranking.',
     'Las más prominentes, de mayor a menor: ' + perfil.destacadas.masAltas.join(', ') + '.',
-    'Las menos prominentes, de menor a mayor: ' + perfil.destacadas.masBajas.join(', ') + '.'
+    'Las menos prominentes, de menor a mayor: ' + perfil.destacadas.masBajas.join(', ') + '.',
+    '',
+    // La lista de arriba está por instrumento; ésta agrupa por nivel. Es la misma
+    // información dos veces a propósito: el modelo confundía "Liderazgo Orientado
+    // a Metas" (Alto) con "Conductas Orientadas a la Tarea" (Medio) —tres
+    // dimensiones arrancan con "Orientad-"— y afirmaba el nivel equivocado en tres
+    // corridas seguidas. Agrupar por nivel hace mucho más difícil equivocarse.
+    'EL MISMO PERFIL AGRUPADO POR NIVEL. Antes de decir que algo es alto, medio o',
+    'bajo, verificá acá. Hay dimensiones con nombres parecidos que están en niveles',
+    'distintos: no las mezcles.',
+    agrupadoPorNivel(perfil)
   ].join('\n');
 }
 
@@ -336,6 +380,21 @@ function reglasComunes() {
     'no pasa por la recompensa externa ni por el deber, lo cual suele ser deseable.',
     'PROHIBIDO presentarlas como un problema o como algo a desarrollar.',
     '',
+    'CÓMO SE ESCRIBE (esto es lo que separa una devolución útil de una lista de',
+    'rótulos). El nivel es el fundamento, no el contenido: nombralo si hace falta,',
+    'pero lo que tiene que leerse es QUÉ HACE la persona, en conducta observable.',
+    '  MAL: "Muestra un nivel alto en Consideración Individualizada, lo que indica',
+    '       una fuerte capacidad para atender las necesidades individuales."',
+    '  BIEN: "Escucha a cada colaborador, entiende sus necesidades particulares y',
+    '        los involucra en las decisiones del área."',
+    'No arranques los textos con "Muestra un nivel…" ni "Presenta un nivel…" ni',
+    '"Con un nivel…". No repitas el nombre técnico de la dimensión como si fuera la',
+    'explicación: traducilo a lo que se ve en el día a día del rol.',
+    '',
+    'Los títulos nombran un concepto, no una dimensión del cuestionario:',
+    '"Acompañamiento e Inclusión", "Clima Colaborativo", "Inacción ante el',
+    'conflicto" — no "Alta Consideración Individualizada".',
+    '',
     'Devolvé EXCLUSIVAMENTE un objeto JSON válido, sin texto alrededor y sin bloques',
     'de código markdown.'
   ];
@@ -360,10 +419,20 @@ function mensajesBloqueDescriptivo(nombre, perfil) {
     '  "areasDesarrollo": [{"titulo": "...", "texto": "..."}]',
     '}',
     '',
+    'El "resumenGeneral" retrata a la persona, no enumera dimensiones. Tiene que',
+    'poder leerse como la descripción de alguien: cómo conduce, en qué se apoya y',
+    'dónde se le nota la falta. Un ejemplo del tono buscado: "Presenta un perfil con',
+    'clara orientación hacia las personas, el bienestar del equipo y la',
+    'participación activa. Muestra predisposición para construir vínculos de',
+    'confianza y un estilo integrador. Sin embargo, evidencia fragilidad en las',
+    'conductas ligadas a estructurar el trabajo, fijar límites y hacer seguimiento."',
+    'Fijate que no nombra ni una dimensión del cuestionario: describe a la persona.',
+    '',
     'LARGO EXACTO:',
-    '- resumenGeneral: 3 o 4 oraciones, nombrando las dimensiones y su nivel.',
-    '- fortalezas: 3 elementos, "texto" de 1 o 2 oraciones.',
-    '- areasDesarrollo: 3 elementos, "texto" de 1 o 2 oraciones.',
+    '- resumenGeneral: 3 o 4 oraciones.',
+    '- fortalezas: 3 elementos, "texto" de 1 o 2 oraciones de conducta observable.',
+    '- areasDesarrollo: 3 elementos, "texto" de 1 o 2 oraciones de conducta',
+    '  observable: qué le cuesta hacer, no qué dimensión tiene baja.',
     'Títulos de 3 a 6 palabras, sin números adentro.',
     '',
     'En "areasDesarrollo" van brechas reales sostenidas por el dato. Está PROHIBIDO',
@@ -408,9 +477,23 @@ function mensajesBloqueAnalitico(nombre, perfil, previo) {
     'sale la tensión, y explicá qué implica para el ejercicio del rol. Escribí solo',
     'las que el dato sostenga y no fuerces una tensión donde el perfil no la muestra.',
     '',
-    'En "recomendaciones", cada acción tiene que declarar su contexto de aplicación',
-    '(a qué tipo de equipo o situación aplica) y ser una conducta concreta y',
-    'observable, no un consejo general.',
+    'En "recomendaciones" NO van consejos generales. Cada una es una PRÁCTICA con',
+    'nombre propio, como si fuera un instrumento que la persona va a implementar, y',
+    'la acción dice su mecánica: qué se define, cada cuánto, y qué se evita. Así:',
+    '  título:   "Matriz de Claridad Operativa y Expectativas"',
+    '  contexto: "Equipos con madurez baja o media: personas en aprendizaje, con',
+    '             poca autonomía o en roles nuevos."',
+    '  acción:   "Establecer acuerdos explícitos al inicio de cada proyecto o ciclo,',
+    '             definiendo el resultado esperado, el nivel de autonomía otorgado y',
+    '             los puntos de control intermedios obligatorios."',
+    'Otro: "Protocolo de Conversaciones de Feedback Correctivo" → "Abordar los',
+    'desvíos dentro de un plazo cercano, sobre hechos objetivos y sin juicios de',
+    'valor, explicitando el impacto y acordando compromisos de ajuste."',
+    'Nada de "implementar reuniones periódicas de seguimiento" ni "promover espacios',
+    'de discusión": eso no le dice a nadie qué hacer el lunes.',
+    '',
+    'El "contexto" tiene que discriminar según la MADUREZ del equipo (baja, media o',
+    'alta autonomía) o una situación puntual, no valer para cualquiera.',
     '',
     'QUÉ VA EN "pendienteDefinir": únicamente vacíos de contexto organizacional que',
     'la evaluación no midió y que hacen falta para aterrizar las recomendaciones.',
@@ -427,11 +510,11 @@ function mensajesBloqueAnalitico(nombre, perfil, previo) {
     '}',
     '',
     'LARGO EXACTO:',
-    '- inferencias: 2 elementos, "texto" de 2 o 3 oraciones — es la parte que más',
-    '  importa, dedicale la precisión.',
+    '- inferencias: 3 elementos, "texto" de 2 o 3 oraciones — es la parte que más',
+    '  importa, dedicale la precisión. Si el perfil sólo sostiene 2, poné 2.',
     '- recomendaciones: 3 elementos, "contexto" de 1 oración y "accion" de 1 o 2.',
     '- pendienteDefinir: 2 elementos, "texto" de 1 oración.',
-    'Títulos de 3 a 6 palabras, sin números adentro.'
+    'Títulos de 3 a 7 palabras, sin números adentro.'
   ]);
 
   var datos = datosDelPerfil(nombre, perfil);
@@ -518,6 +601,114 @@ function validarContenido(texto, perfil) {
 }
 
 /**
+ * Palabras con las que el texto puede nombrar un nivel, de la más larga a la más
+ * corta para que "muy alto" no se confunda con "alto".
+ *
+ * "medio" y "promedio" cuentan como lo mismo: las dimensiones de liderazgo usan
+ * Medio y las de personalidad Promedio, y para el lector son el mismo nivel.
+ */
+// Un nivel atribuido a dimensiones: "nivel alto en X", "niveles medios de X e Y".
+// Se exige el conector (en/de/para) a propósito: es lo que ata el nivel a lo que
+// viene después. Sin él, "Inspiración muestra un nivel alto, la Estimulación
+// Intelectual se encuentra en nivel medio" haría que "alto" se le pegara a
+// Estimulación —la oración es correcta y el rechazo era falso—.
+var SINTESIS_NIVEL_ATRIBUIDO = new RegExp(
+  'nivel(?:es)?\\s+(muy\\s+alt[oa]s?|muy\\s+baj[oa]s?|alt[oa]s?|baj[oa]s?|promedios?|medi[oa]s?)'
+  + '\\s+(?:en|de|para)\\s+',
+  'gi'
+);
+
+/** Dónde empieza el próximo nivel declarado, para cortar el alcance del actual. */
+var SINTESIS_CUALQUIER_NIVEL = /nivel(?:es)?\s+(?:muy\s+)?(?:alt|baj|medi|promedi)/gi;
+
+// Dónde termina la enumeración y empieza otra cláusula. Sin esto el alcance de un
+// nivel se come la dimensión de la cláusula siguiente: en "nivel alto en
+// Inspiración, su Carisma se encuentra en nivel medio" —que es correcto— el
+// "alto" le caía también a Carisma. Ojo con " y ": une una lista, no la corta.
+var SINTESIS_CORTE_DE_CLAUSULA = new RegExp(
+  ',\\s*(?:su|sus|pero|aunque|mientras|si\\s+bien|en\\s+cambio|lo\\s+que|esto|y\\s+su)\\b'
+  + '|\\s(?:pero|aunque|mientras|en\\s+cambio|si\\s+bien|frente\\s+a|contrasta)\\b',
+  'i'
+);
+
+/** Lleva cualquier forma de nombrar un nivel a una etiqueta comparable.
+ *  "Medio" y "Promedio" cuentan como el mismo nivel: las dimensiones de liderazgo
+ *  usan Medio y las de personalidad Promedio, y para el lector son lo mismo. */
+function nivelNormalizado(texto) {
+  var t = String(texto).toLowerCase();
+  if (/muy\s*alt/.test(t)) return 'MUY ALTO';
+  if (/muy\s*baj/.test(t)) return 'MUY BAJO';
+  if (/alt/.test(t)) return 'ALTO';
+  if (/baj/.test(t)) return 'BAJO';
+  return 'MEDIO';
+}
+
+/**
+ * Que el nivel que el texto le atribuye a una dimensión sea el que tiene.
+ *
+ * Hace falta porque pasó dos veces en informes reales: el modelo escribió "un
+ * nivel medio en Conductas Orientadas a la Tarea y Liderazgo Orientado a Metas" y
+ * "el nivel medio en Liderazgo Orientado a Metas" cuando esa dimensión estaba en
+ * Alto. El error no cita números ni usa jerga, así que ninguna otra validación lo
+ * veía, y encima contradecía a la sección 3 del mismo informe: es exactamente la
+ * inconsistencia entre secciones que el PO señaló en HU2.
+ *
+ * Sólo se revisa la construcción "nivel X en/de <dimensiones>", que es la que
+ * ata sin ambigüedad un nivel a las dimensiones que lo siguen. Las otras formas
+ * ("X muestra un nivel alto") se dejan pasar: distinguirlas exigiría analizar
+ * sintaxis, y un rechazo falso cuesta una llamada al modelo y puede terminar en
+ * la síntesis pobre. Vale más dejar pasar un error raro que rechazar texto bueno.
+ */
+function validarNivelesCoherentes(texto, perfil) {
+  var dimensiones = perfil.dimensiones.map(function (d) {
+    return { nombre: d.dimension, nivel: nivelNormalizado(d.nivel) };
+  }).concat(perfil.neo.map(function (d) {
+    return { nombre: d.dimension, nivel: nivelNormalizado(d.nivel) };
+  }));
+
+  var oraciones = String(texto).split(/[.;\n]+/);
+  for (var i = 0; i < oraciones.length; i++) {
+    var oracion = oraciones[i];
+
+    // Dónde arranca cada nivel declarado, para saber hasta dónde llega el alcance
+    // del anterior.
+    var cortes = [];
+    SINTESIS_CUALQUIER_NIVEL.lastIndex = 0;
+    var c;
+    while ((c = SINTESIS_CUALQUIER_NIVEL.exec(oracion)) !== null) cortes.push(c.index);
+
+    SINTESIS_NIVEL_ATRIBUIDO.lastIndex = 0;
+    var m;
+    while ((m = SINTESIS_NIVEL_ATRIBUIDO.exec(oracion)) !== null) {
+      var declarado = nivelNormalizado(m[1]);
+      var desde = m.index + m[0].length;
+      var hasta = oracion.length;
+      for (var k = 0; k < cortes.length; k++) {
+        if (cortes[k] >= desde) { hasta = cortes[k]; break; }
+      }
+      var alcance = oracion.slice(desde, hasta);
+      // El nivel alcanza hasta donde termina su enumeración, no hasta la próxima
+      // dimensión: la de la cláusula siguiente tiene su propio nivel.
+      var corte = alcance.search(SINTESIS_CORTE_DE_CLAUSULA);
+      if (corte >= 0) alcance = alcance.slice(0, corte);
+
+      for (var j = 0; j < dimensiones.length; j++) {
+        var dim = dimensiones[j];
+        if (alcance.indexOf(dim.nombre) < 0) continue;
+        if (dim.nivel !== declarado) {
+          return {
+            ok: false,
+            motivo: 'le atribuye nivel ' + declarado.toLowerCase() + ' a "' + dim.nombre
+              + '", que está en ' + dim.nivel.toLowerCase()
+          };
+        }
+      }
+    }
+  }
+  return { ok: true, motivo: '' };
+}
+
+/**
  * La motivación extrínseca y la social-normativa bajas no son una brecha: si
  * aparecen como área de desarrollo, la lectura psicométrica está mal.
  */
@@ -536,8 +727,12 @@ function validarBloque(bloque, datos, perfil) {
   var estructura = validarEstructura(datos, bloque.listas, bloque.resumen);
   if (!estructura.ok) return estructura;
 
-  var contenido = validarContenido(textoDeSintesis(datos), perfil);
+  var texto = textoDeSintesis(datos);
+  var contenido = validarContenido(texto, perfil);
   if (!contenido.ok) return contenido;
+
+  var niveles = validarNivelesCoherentes(texto, perfil);
+  if (!niveles.ok) return niveles;
 
   if (datos.areasDesarrollo) {
     var motivacion = validarLecturaMotivacion(datos.areasDesarrollo);
@@ -556,8 +751,12 @@ function validarSintesis(sintesis, perfil) {
   var estructura = validarEstructura(sintesis, todasLasListas, true);
   if (!estructura.ok) return estructura;
 
-  var contenido = validarContenido(textoDeSintesis(sintesis), perfil);
+  var texto = textoDeSintesis(sintesis);
+  var contenido = validarContenido(texto, perfil);
   if (!contenido.ok) return contenido;
+
+  var niveles = validarNivelesCoherentes(texto, perfil);
+  if (!niveles.ok) return niveles;
 
   return validarLecturaMotivacion(sintesis.areasDesarrollo);
 }
@@ -612,10 +811,11 @@ function jsonDeRespuesta(contenido) {
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * Pide un bloque y lo valida. Devuelve null si no se pudo obtener uno válido.
+ * Pide un bloque y lo valida.
  *
  * @param {Object} bloque SINTESIS_BLOQUE_DESCRIPTIVO o SINTESIS_BLOQUE_ANALITICO
- * @return {Object|null}
+ * @return {Object} {datos: Object|null, motivo: string} — el motivo viaja hasta
+ *   la interfaz cuando el bloque falla, así el fallback deja de ser silencioso.
  */
 function pedirBloque(bloque, mensajes, perfil, clave, modelo) {
   var ultimoMotivo = '';
@@ -656,7 +856,7 @@ function pedirBloque(bloque, mensajes, perfil, clave, modelo) {
         ultimoMotivo = revision.motivo;
         continue;
       }
-      return datos;
+      return { datos: datos, motivo: '' };
     } catch (e) {
       // Acá caen los cortes por tiempo de UrlFetchApp. Con la llamada única no
       // valía la pena reintentar: tardaba 45-72 s y el reintento chocaba contra
@@ -671,7 +871,7 @@ function pedirBloque(bloque, mensajes, perfil, clave, modelo) {
 
   console.warn('No se pudo obtener el bloque ' + bloque.clave + ' de la síntesis ('
     + LLM_INTENTOS + ' intentos). Último motivo: ' + ultimoMotivo + '.');
-  return null;
+  return { datos: null, motivo: 'bloque ' + bloque.clave + ': ' + ultimoMotivo };
 }
 
 /**
@@ -689,7 +889,9 @@ function pedirBloque(bloque, mensajes, perfil, clave, modelo) {
  * @param {Object} resultados salida de corregir()
  * @param {Function} [avisar] recibe 0 o 1 al arrancar cada bloque, para que la
  *   interfaz pueda mostrar por cuál va. Opcional: sin él todo funciona igual.
- * @return {Object|null} síntesis validada
+ * @return {Object} {sintesis: Object|null, motivo: string}. El motivo se devuelve
+ *   —y no sólo se loguea— porque un fallback silencioso obliga a adivinar por qué
+ *   el informe salió con el texto pobre. Va hasta la interfaz.
  */
 function sintesisDeLiderazgo(nombre, resultados, avisar) {
   var anunciar = function (bloque) {
@@ -698,8 +900,9 @@ function sintesisDeLiderazgo(nombre, resultados, avisar) {
   var propiedades = PropertiesService.getScriptProperties();
   var clave = propiedades.getProperty(PROP_LLM_API_KEY);
   if (!clave) {
-    console.warn('Sin ' + PROP_LLM_API_KEY + ' en Propiedades del script: la síntesis del punto 5 sale con el texto determinista.');
-    return null;
+    var sinClave = 'falta la propiedad ' + PROP_LLM_API_KEY + ' en Propiedades del script';
+    console.warn('Sin ' + PROP_LLM_API_KEY + ': la síntesis del punto 5 sale con el texto determinista.');
+    return { sintesis: null, motivo: sinClave };
   }
   var modelo = propiedades.getProperty(PROP_LLM_MODELO) || LLM_MODELO_POR_DEFECTO;
   var perfil = perfilParaSintesis(resultados);
@@ -710,23 +913,23 @@ function sintesisDeLiderazgo(nombre, resultados, avisar) {
     mensajesBloqueDescriptivo(nombre, perfil),
     perfil, clave, modelo
   );
-  if (!descriptivo) return null;
+  if (!descriptivo.datos) return { sintesis: null, motivo: descriptivo.motivo };
 
   anunciar(1);
   var analitico = pedirBloque(
     SINTESIS_BLOQUE_ANALITICO,
-    mensajesBloqueAnalitico(nombre, perfil, descriptivo),
+    mensajesBloqueAnalitico(nombre, perfil, descriptivo.datos),
     perfil, clave, modelo
   );
-  if (!analitico) return null;
+  if (!analitico.datos) return { sintesis: null, motivo: analitico.motivo };
 
   var sintesis = {
-    resumenGeneral: descriptivo.resumenGeneral,
-    fortalezas: descriptivo.fortalezas,
-    areasDesarrollo: descriptivo.areasDesarrollo,
-    inferencias: analitico.inferencias,
-    recomendaciones: analitico.recomendaciones,
-    pendienteDefinir: analitico.pendienteDefinir
+    resumenGeneral: descriptivo.datos.resumenGeneral,
+    fortalezas: descriptivo.datos.fortalezas,
+    areasDesarrollo: descriptivo.datos.areasDesarrollo,
+    inferencias: analitico.datos.inferencias,
+    recomendaciones: analitico.datos.recomendaciones,
+    pendienteDefinir: analitico.datos.pendienteDefinir
   };
 
   // Los bloques se validaron por separado; esta es la revisión de la pieza unida,
@@ -734,9 +937,9 @@ function sintesisDeLiderazgo(nombre, resultados, avisar) {
   var revision = validarSintesis(sintesis, perfil);
   if (!revision.ok) {
     console.warn('La síntesis unida no validó (' + revision.motivo + '). Sale la determinista.');
-    return null;
+    return { sintesis: null, motivo: 'la síntesis unida no validó: ' + revision.motivo };
   }
 
   sintesis.modelo = modelo;
-  return sintesis;
+  return { sintesis: sintesis, motivo: '' };
 }

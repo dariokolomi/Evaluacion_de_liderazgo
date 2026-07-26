@@ -460,10 +460,19 @@ function sintesisNarrativa(body, s) {
 
   if (s.modelo) {
     body.appendParagraph('');
-    parrafo(body, 'Síntesis asistida por ' + s.modelo + ', sobre los percentiles y puntajes T '
-      + 'calculados en este informe. Requiere revisión profesional antes de la devolución.',
+    // Sin el prefijo del proveedor ("nvidia/…"): el nombre del modelo alcanza, y
+    // decía "sobre los percentiles y puntajes T", que era justo lo que el PO pidió
+    // que este punto no mencione.
+    parrafo(body, 'Síntesis asistida por IA ' + nombreDeModelo(s.modelo)
+      + ' - Requiere revisión profesional antes de la devolución.',
       { cursiva: true, tamano: 8 });
   }
+}
+
+/** "nvidia/llama-3.3-nemotron-super-49b-v1.5" → "llama-3.3-nemotron-super-49b-v1.5" */
+function nombreDeModelo(modelo) {
+  var partes = String(modelo).split('/');
+  return partes[partes.length - 1];
 }
 
 /** Viñeta con el título en negrita y el desarrollo a continuación. */
