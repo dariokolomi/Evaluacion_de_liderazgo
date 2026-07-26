@@ -94,6 +94,25 @@
     .estrellas { color: var(--acento); letter-spacing: .1em; white-space: nowrap; }
     .vacio { color: #7b8794; font-style: italic; }
     .cargando { display: flex; align-items: center; gap: .6rem; }
+    /* Línea de proceso: los puntos son las etapas reales de la generación, no un
+       temporizador. La etapa en curso se marca en color y con su nombre al lado. */
+    .proceso { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+    .etapas { display: flex; align-items: center; gap: .3rem; }
+    .etapa {
+      width: .5rem; height: .5rem;
+      border-radius: 50%;
+      background: var(--borde);
+      transition: background .3s, transform .3s;
+    }
+    .etapa.hecha { background: var(--cchh); }
+    .etapa.actual { background: var(--acento); transform: scale(1.5); }
+    .etapa-nombre {
+      font-size: .85rem;
+      color: var(--cchh);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .etapa-contador { font-size: .78rem; color: #7b8794; font-weight: 400; }
     /* Utilitaria para esconder: con !important le gana a un display propio del
        elemento (si no, un `display` más específico lo deja siempre visible). */
     .oculto { display: none !important; }
@@ -158,7 +177,11 @@
         <button id="generar" disabled>Generar informe</button>
         <div id="cargando" class="cargando oculto">
           <div class="spinner"></div>
-          <span style="font-size:.9rem">Corrigiendo y armando el informe…</span>
+          <div class="proceso">
+            <div id="etapas" class="etapas"></div>
+            <span id="etapa-nombre" class="etapa-nombre">Empezando…</span>
+            <span id="etapa-contador" class="etapa-contador"></span>
+          </div>
         </div>
       </div>
       <div id="resultado"></div>
@@ -349,6 +372,58 @@
       $('dialogo').showModal();
     }
 
+    // ── Progreso de la generación ─────────────────────────────────
+    // Las etapas vienen del servidor (Progreso.gs) para no duplicar la lista.
+    const ETAPAS = <?!= etapasJson ?>;
+    const SONDEO_MS = 2000;
+    let sondeo = null;
+    let sondeoEnVuelo = false;
+
+    function dibujarEtapas() {
+      $('etapas').replaceChildren(...ETAPAS.map(() => {
+        const punto = document.createElement('div');
+        punto.className = 'etapa';
+        return punto;
+      }));
+    }
+
+    /** Marca la etapa en curso. `indice` -1 deja todo apagado. */
+    function pintarEtapa(indice, nombre) {
+      [...$('etapas').children].forEach((punto, i) => {
+        punto.className = 'etapa'
+          + (i < indice ? ' hecha' : '')
+          + (i === indice ? ' actual' : '');
+      });
+      $('etapa-nombre').textContent = nombre || 'Empezando…';
+      $('etapa-contador').textContent = indice >= 0
+        ? '(' + (indice + 1) + ' de ' + ETAPAS.length + ')'
+        : '';
+    }
+
+    function empezarSondeo(token) {
+      dibujarEtapas();
+      pintarEtapa(-1, null);
+      sondeo = setInterval(() => {
+        // Sin encimar pedidos: si el anterior no volvió, se espera. Una llamada
+        // por etapa alcanza, y apilarlas sólo agrega latencia.
+        if (sondeoEnVuelo) return;
+        sondeoEnVuelo = true;
+        google.script.run
+          .withSuccessHandler((p) => {
+            sondeoEnVuelo = false;
+            if (p) pintarEtapa(p.etapa, p.nombre);
+          })
+          .withFailureHandler(() => { sondeoEnVuelo = false; })
+          .progresoDeInforme(token);
+      }, SONDEO_MS);
+    }
+
+    function pararSondeo() {
+      if (sondeo) clearInterval(sondeo);
+      sondeo = null;
+      sondeoEnVuelo = false;
+    }
+
     $('generar').addEventListener('click', () => {
       const planillaId = $('planilla').value;
       const nombre = $('evaluado').value.trim();
@@ -359,8 +434,14 @@
       $('cargando').classList.remove('oculto');
       $('resultado').replaceChildren();
 
+      // Identifica a esta corrida para poder pedirle el avance. No lleva datos
+      // de nadie: es una clave del Cache y nada más.
+      const token = 'c' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+      empezarSondeo(token);
+
       google.script.run
         .withSuccessHandler((r) => {
+          pararSondeo();
           $('generar').disabled = false;
           $('cargando').classList.add('oculto');
           const link = document.createElement('a');
@@ -373,11 +454,12 @@
           cargarHistorial();
         })
         .withFailureHandler((e) => {
+          pararSondeo();
           $('generar').disabled = false;
           $('cargando').classList.add('oculto');
           mostrarAviso('error', [e.message]);
         })
-        .generarDesdeInterfaz({ planillaId: planillaId, nombreEvaluado: nombre });
+        .generarDesdeInterfaz({ planillaId: planillaId, nombreEvaluado: nombre, token: token });
     });
 
     $('cancelar').addEventListener('click', () => $('dialogo').close());

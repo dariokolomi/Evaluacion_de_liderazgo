@@ -19,7 +19,8 @@ const CELDAS = path.join(__dirname, 'celdas-python.json');
 
 const ARCHIVOS_GS = [
   'Correccion.gs', 'Lectura.gs', 'Textos.gs', 'Documento.gs',
-  'Radar.gs', 'Configuracion.gs', 'Acceso.gs', 'Historial.gs', 'Informe.gs',
+  'Radar.gs', 'Configuracion.gs', 'Acceso.gs', 'Historial.gs', 'Sintesis.gs',
+  'Progreso.gs', 'Informe.gs',
 ];
 
 const CARPETA_INFORMES = 'carpeta-informes-id';
@@ -124,7 +125,15 @@ function crearEntorno(grillas, escenario) {
   return {
     registro,
     globales: {
-      PropertiesService: { getScriptProperties: () => ({ getProperties: () => propiedades }) },
+      // getProperty lo usa Sintesis.gs para leer la clave del LLM. Acá nunca está
+      // definida, así que la síntesis devuelve null y el punto 5 sale con el
+      // texto determinista, que es justamente lo que este test compara.
+      PropertiesService: {
+        getScriptProperties: () => ({
+          getProperties: () => propiedades,
+          getProperty: (clave) => propiedades[clave] || null,
+        }),
+      },
       Session: { getActiveUser: () => ({ getEmail: () => USUARIO }), getScriptTimeZone: () => 'America/Argentina/Buenos_Aires' },
       GroupsApp: {
         getGroupByEmail: (correo) => {

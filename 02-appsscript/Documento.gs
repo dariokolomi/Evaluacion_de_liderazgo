@@ -145,7 +145,7 @@ function construirInforme(body, datos) {
   body.appendPageBreak();
   seccionGrafico(body, datos.nombre, datos.imagenRadar, cel, cam, con);
   body.appendPageBreak();
-  seccionSintesis(body, neo, cel, cam, pot, con);
+  seccionSintesis(body, neo, cel, cam, pot, con, datos.sintesis);
 }
 
 function portada(body, nombre, fecha) {
@@ -376,10 +376,84 @@ function seccionGrafico(body, nombre, imagenRadar, cel, cam, con) {
   parrafo(body, 'Brechas moderadas: Liderazgo Directivo (P' + cam.Dir + ' vs ideal P75) y Conductas de Tarea (P' + con.Tar + ' vs ideal P75).');
 }
 
-function seccionSintesis(body, neo, cel, cam, pot, con) {
+/**
+ * Punto 5 del informe.
+ *
+ * Si llegó una síntesis del LLM ya validada (ver Sintesis.gs), se redacta con la
+ * estructura narrativa que pidió el PO en `Informe-MA.docx`. Si no llegó —sin
+ * clave, sin red, o la respuesta no pasó la validación— se emite la síntesis
+ * determinista de siempre: el informe se genera igual, nunca queda a medias.
+ */
+function seccionSintesis(body, neo, cel, cam, pot, con, sintesis) {
   parrafo(body, '5. Síntesis de Evaluación de Liderazgo — para Feedback y registro al evaluado/a.', { negrita: true, centrado: true, tamano: 13 });
   body.appendParagraph('');
 
+  if (sintesis) {
+    sintesisNarrativa(body, sintesis);
+    return;
+  }
+  sintesisDeterminista(body, neo, cel, cam, pot, con);
+}
+
+/** Estructura de `Informe-MA.docx`: resumen, fortalezas, áreas, inferencias,
+ *  recomendaciones con contexto de aplicación y vacíos por definir. */
+function sintesisNarrativa(body, s) {
+  parrafo(body, 'Resumen General', { negrita: true, tamano: 11 });
+  parrafo(body, s.resumenGeneral);
+  body.appendParagraph('');
+
+  parrafo(body, 'Fortalezas Clave', { negrita: true, tamano: 11 });
+  vinetasConTitulo(body, s.fortalezas);
+  body.appendParagraph('');
+
+  parrafo(body, 'Áreas de Desarrollo', { negrita: true, tamano: 11 });
+  vinetasConTitulo(body, s.areasDesarrollo);
+  body.appendParagraph('');
+
+  parrafo(body, 'Inferencias del Perfil', { negrita: true, tamano: 11 });
+  parrafo(body, 'En el análisis del perfil se observan las siguientes inferencias cualitativas:');
+  vinetasConTitulo(body, s.inferencias);
+  body.appendParagraph('');
+
+  parrafo(body, 'Recomendaciones de Acciones Concretas de Desarrollo', { negrita: true, tamano: 11 });
+  parrafo(body, 'Las acciones sugeridas evalúan el contexto y el grado de autonomía (madurez) de los colaboradores que lidera:');
+  s.recomendaciones.forEach(function (item) {
+    var p = body.appendParagraph('');
+    p.setIndentStart(SANGRIA_VINETA_PT);
+    textoNegrita(p, '• ' + item.titulo);
+    var pc = body.appendParagraph('');
+    pc.setIndentStart(SANGRIA_VINETA_PT);
+    textoNegrita(pc, 'Contexto de aplicación: ');
+    textoNormal(pc, item.contexto);
+    var pa = body.appendParagraph('');
+    pa.setIndentStart(SANGRIA_VINETA_PT);
+    textoNegrita(pa, 'Acción: ');
+    textoNormal(pa, item.accion);
+  });
+  body.appendParagraph('');
+
+  parrafo(body, 'Información estratégica — Pendiente de Definir', { negrita: true, tamano: 11 });
+  vinetasConTitulo(body, s.pendienteDefinir);
+
+  if (s.modelo) {
+    body.appendParagraph('');
+    parrafo(body, 'Síntesis asistida por ' + s.modelo + ', sobre los percentiles y puntajes T '
+      + 'calculados en este informe. Requiere revisión profesional antes de la devolución.',
+      { cursiva: true, tamano: 8 });
+  }
+}
+
+/** Viñeta con el título en negrita y el desarrollo a continuación. */
+function vinetasConTitulo(body, items) {
+  items.forEach(function (item) {
+    var p = body.appendParagraph('');
+    p.setIndentStart(SANGRIA_VINETA_PT);
+    textoNegrita(p, '• ' + item.titulo + ': ');
+    textoNormal(p, item.texto);
+  });
+}
+
+function sintesisDeterminista(body, neo, cel, cam, pot, con) {
   parrafo(body, 'Principales Fortalezas', { negrita: true, tamano: 11 });
   var fortalezas = [];
   if (cel.ConsInd >= 75) fortalezas.push('Consideración Individualizada (P' + cel.ConsInd + '): atiende activamente el desarrollo y las necesidades de cada colaborador/a, construyendo vínculos de confianza sólidos.');
