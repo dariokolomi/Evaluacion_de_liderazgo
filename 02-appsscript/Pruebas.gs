@@ -68,6 +68,64 @@ function verificarHistorialContraDrive() {
   return r;
 }
 
+/**
+ * Propiedad que confirma el vaciado del historial.
+ *
+ * Se pide una propiedad y no un argumento porque el editor no sabe pasarle
+ * argumentos a una función: sin esto, `vaciarHistorial` sería un ítem más del
+ * desplegable, al lado de las otras, y borrar todo quedaría a un click de
+ * distancia de correr un diagnóstico.
+ *
+ * El valor tiene que ser la CANTIDAD de corridas que informa el simulacro.
+ */
+var PROP_CONFIRMAR_VACIADO = 'CONFIRMO_VACIAR_HISTORIAL';
+
+/** Muestra qué se borraría del historial. No toca nada. */
+function simularVaciadoDelHistorial() {
+  var config = configuracion();
+  var filas = contarCorridas(config.historialId);
+  if (!filas) {
+    console.log('El historial ya está vacío: no hay nada que borrar.');
+    return 0;
+  }
+  console.log('Se borrarían %s corrida(s), dejando sólo el encabezado.', filas);
+  console.log('Antes de borrar se copia todo a una hoja "%s<fecha>" del mismo libro.',
+    HOJA_RESPALDO_PREFIJO);
+  console.log('Para confirmar: definir la propiedad de script %s = %s y correr vaciarHistorial().',
+    PROP_CONFIRMAR_VACIADO, filas);
+  return filas;
+}
+
+/**
+ * Vacía el historial. Exige que la propiedad de confirmación traiga la cantidad
+ * exacta de corridas que hay.
+ *
+ * La propiedad se borra al terminar, así que una segunda corrida por accidente no
+ * hace nada: hay que volver a confirmar a propósito.
+ */
+function vaciarHistorial() {
+  var config = configuracion();
+  var propiedades = PropertiesService.getScriptProperties();
+  var confirmacion = propiedades.getProperty(PROP_CONFIRMAR_VACIADO);
+  if (!confirmacion) {
+    throw new Error(
+      'Falta confirmar. Corré simularVaciadoDelHistorial(), y después definí la propiedad '
+      + PROP_CONFIRMAR_VACIADO + ' con la cantidad de corridas que informó.'
+    );
+  }
+
+  var resultado = vaciarCorridas(config.historialId, Number(confirmacion));
+  propiedades.deleteProperty(PROP_CONFIRMAR_VACIADO);
+
+  if (!resultado.borradas) {
+    console.log('El historial ya estaba vacío.');
+    return resultado;
+  }
+  console.log('Borradas %s corrida(s). Respaldo en la hoja "%s" del mismo libro.',
+    resultado.borradas, resultado.respaldo);
+  return resultado;
+}
+
 /** Verifica la configuración y el acceso sin generar nada. */
 function verificarConfiguracion() {
   var config = configuracion();

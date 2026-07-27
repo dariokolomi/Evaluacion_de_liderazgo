@@ -23,13 +23,22 @@ const CARPETA_PLANILLAS = 'carpeta-planillas-id';
 
 const ENCABEZADO = ['Fecha', 'Evaluado', 'Planilla', 'Informe', 'Generado por', 'Segundos', 'Calificación', 'Comentario'];
 
-function hojaFalsa(filas) {
+function hojaFalsa(filas, registro) {
   const datos = filas.map((f) => f.slice());
   return {
     datos,
     getLastRow: () => datos.length,
     appendRow: (fila) => { datos.push(fila.slice()); },
     setFrozenRows: () => {},
+    deleteRows: (desde, cantidad) => { datos.splice(desde - 1, cantidad); },
+    // El respaldo del vaciado. Se anota el contenido al momento de copiar, no una
+    // referencia: si guardara la referencia, el respaldo "cambiaría" al borrarse
+    // las filas y el test pasaría sin que se haya copiado nada.
+    copyTo: () => ({
+      setName: (nombre) => {
+        if (registro) registro.respaldos.push({ nombre, filas: datos.map((f) => f.slice()) });
+      },
+    }),
     getRange: (fila, columna, cantidadFilas, cantidadColumnas) => ({
       getValues: () => datos.slice(fila - 1, fila - 1 + (cantidadFilas || 1))
         .map((f) => f.slice(columna - 1, columna - 1 + (cantidadColumnas || 1))),
@@ -64,9 +73,11 @@ function crearEntorno(escenario) {
     // Qué lock pidió la calificación y si lo soltó. El tipo importa: el de usuario
     // no serializa a dos personas distintas, que es lo único que hay que evitar.
     lock: { tipo: null, tomado: 0, suelto: 0 },
+    // Hojas de respaldo creadas por el vaciado, con su contenido al momento de copiar.
+    respaldos: [],
   };
 
-  const hoja = hojaFalsa(e.filas || [ENCABEZADO]);
+  const hoja = hojaFalsa(e.filas || [ENCABEZADO], registro);
   const archivos = e.archivos || [
     { id: 'a', nombre: 'Planilla vieja.xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', actualizado: 1000 },
     { id: 'b', nombre: 'Notas sueltas.pdf', mime: 'application/pdf', actualizado: 3000 },
@@ -172,7 +183,8 @@ function cargarGs(globales) {
     ...nombres,
     `${fuente}\nreturn { doGet, listarPlanillas, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml,
        progresoDeInforme, marcarEtapa, limpiarProgreso, ETAPAS_INFORME, VERSION_APP,
-       compararHistorialConDrive, idDeUrlDeDrive };`
+       compararHistorialConDrive, idDeUrlDeDrive, contarCorridas, vaciarCorridas,
+       HOJA_RESPALDO_PREFIJO };`
   )(...nombres.map((n) => globales[n]));
 }
 
@@ -334,6 +346,71 @@ function main() {
   revisar('cuando todo coincide, no reporta nada',
     !limpio.sinArchivo.length && !limpio.sinFila.length && !limpio.sinUrl.length,
     JSON.stringify(limpio));
+
+  // ── El vaciado del historial ──
+  // Es la única operación que destruye datos, así que lo que más importa verificar
+  // no es que borre, sino todo lo que tiene que pasar ANTES de borrar.
+  const conTresCorridas = () => crearEntorno({
+    filas: [ENCABEZADO, filaDe('Uno', url('a')), filaDe('Dos', url('b')), filaDe('Tres', url('c'))],
+  });
+
+  let env = conTresCorridas();
+  let gsV = cargarGs(env.globales);
+  revisar('cuenta las corridas sin contar el encabezado',
+    gsV.contarCorridas('historial-id') === 3, String(gsV.contarCorridas('historial-id')));
+
+  const vaciado = gsV.vaciarCorridas('historial-id', 3);
+  revisar('vaciar deja sólo el encabezado',
+    env.hoja.datos.length === 1 && env.hoja.datos[0][0] === 'Fecha',
+    JSON.stringify(env.hoja.datos.map((f) => f[1])));
+  revisar('y devuelve cuántas borró', vaciado.borradas === 3, String(vaciado.borradas));
+
+  revisar('antes de borrar deja un respaldo con las filas completas',
+    env.registro.respaldos.length === 1 && env.registro.respaldos[0].filas.length === 4,
+    JSON.stringify(env.registro.respaldos.map((r) => r.filas.length)));
+  revisar('el respaldo se llama con el prefijo declarado',
+    env.registro.respaldos[0].nombre.indexOf(gsV.HOJA_RESPALDO_PREFIJO) === 0,
+    env.registro.respaldos[0].nombre);
+
+  // La confirmación por cantidad: cubre el caso de correr el simulacro, distraerse,
+  // y que en el medio se haya generado un informe más.
+  env = conTresCorridas();
+  gsV = cargarGs(env.globales);
+  const desfasado = intentar(() => gsV.vaciarCorridas('historial-id', 2));
+  revisar('si la cantidad no coincide, no borra nada',
+    !!desfasado.error && env.hoja.datos.length === 4,
+    `filas que quedaron: ${env.hoja.datos.length}`);
+  revisar('y el error dice los dos números, para poder confirmar de nuevo',
+    !!desfasado.error && /2/.test(desfasado.error.message) && /3/.test(desfasado.error.message),
+    desfasado.error && desfasado.error.message);
+  revisar('tampoco deja un respaldo a medias', env.registro.respaldos.length === 0);
+
+  // Un historial ya vacío no es un error ni genera un respaldo vacío.
+  env = crearEntorno({ filas: [ENCABEZADO] });
+  gsV = cargarGs(env.globales);
+  const yaVacio = gsV.vaciarCorridas('historial-id', 0);
+  revisar('un historial ya vacío no rompe ni deja respaldo',
+    yaVacio.borradas === 0 && yaVacio.respaldo === null && env.registro.respaldos.length === 0,
+    JSON.stringify(yaVacio));
+
+  // El lock, por lo mismo que en calificar: una calificación simultánea escribiría
+  // sobre filas que están por desaparecer.
+  env = conTresCorridas();
+  gsV = cargarGs(env.globales);
+  gsV.vaciarCorridas('historial-id', 3);
+  revisar('el vaciado toma el lock de script y lo suelta',
+    env.registro.lock.tipo === 'script' && env.registro.lock.tomado === 1
+    && env.registro.lock.suelto === 1, JSON.stringify(env.registro.lock));
+
+  env = crearEntorno({
+    lockOcupado: true,
+    filas: [ENCABEZADO, filaDe('Uno', url('a'))],
+  });
+  gsV = cargarGs(env.globales);
+  const ocupadoV = intentar(() => gsV.vaciarCorridas('historial-id', 1));
+  revisar('con el lock ocupado no borra nada',
+    !!ocupadoV.error && env.hoja.datos.length === 2,
+    ocupadoV.error && ocupadoV.error.message);
 
   // ── El lock de la calificación ──
   // Registrar una corrida es un append y el Sheet lo serializa solo. Calificar es

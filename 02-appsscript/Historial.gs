@@ -171,6 +171,65 @@ function compararHistorialConDrive(historialId, carpetaId, limite) {
   };
 }
 
+var HOJA_RESPALDO_PREFIJO = 'Corridas-respaldo-';
+
+/** Cuántas corridas hay registradas, sin contar el encabezado. No toca nada. */
+function contarCorridas(historialId) {
+  return Math.max(0, hojaDeHistorial(historialId).getLastRow() - 1);
+}
+
+/**
+ * Vacía el historial dejando sólo el encabezado.
+ *
+ * DOS SALVAGUARDAS, porque esto no se deshace y se dispara desde un desplegable
+ * del editor donde errarle al click cuesta un solo pixel:
+ *
+ *   1. Antes de borrar, copia la hoja entera a `Corridas-respaldo-<fecha>` dentro
+ *      del mismo libro. El respaldo se hace primero: si falla, no se borra nada.
+ *   2. Hay que declarar cuántas filas se espera borrar. Si no coinciden, no toca
+ *      nada. Cubre el caso de haber corrido el simulacro, haberse distraído, y
+ *      que en el medio se haya generado un informe más.
+ *
+ * Toma el lock por lo mismo que `calificarCorrida`: es un leer-validar-escribir,
+ * y acá una calificación simultánea escribiría sobre filas que están por
+ * desaparecer.
+ *
+ * @param {number} filasEsperadas cuántas corridas se espera borrar
+ * @return {Object} {borradas, respaldo}
+ */
+function vaciarCorridas(historialId, filasEsperadas) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(ESPERA_LOCK_MS);
+  } catch (e) {
+    throw new Error('El historial está siendo usado en este momento. Probá de nuevo en unos segundos.');
+  }
+
+  try {
+    var hoja = hojaDeHistorial(historialId);
+    var filas = hoja.getLastRow() - 1;
+    if (filas <= 0) return { borradas: 0, respaldo: null };
+
+    if (filas !== filasEsperadas) {
+      throw new Error(
+        'Se esperaba borrar ' + filasEsperadas + ' corrida(s) y hay ' + filas + '. '
+        + 'No se borró nada: volvé a correr el simulacro y confirmá con el número nuevo.'
+      );
+    }
+
+    // El respaldo va antes del borrado, no después: si copyTo falla, el historial
+    // sigue entero. Al revés, un fallo dejaría los datos perdidos sin copia.
+    var nombre = HOJA_RESPALDO_PREFIJO
+      + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmm');
+    hoja.copyTo(SpreadsheetApp.openById(historialId)).setName(nombre);
+
+    hoja.deleteRows(2, filas);
+    return { borradas: filas, respaldo: nombre };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 var ESPERA_LOCK_MS = 10000;
 
 /**
