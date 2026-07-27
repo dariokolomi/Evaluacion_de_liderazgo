@@ -124,6 +124,29 @@ const DIVERGENCIAS = [
       || `debería contener la etiqueta calculada "${perfil.etiqueta}"`,
   },
   {
+    desde: 'El siguiente gráfico contrasta el perfil de',
+    porque: 'la frase equiparaba "cerca del ideal" con "fortaleza consolidada", que es '
+      + 'el término que el punto 5 usa con otra regla',
+    revisar: (texto) => (!/fortalezas consolidadas/.test(texto)
+      && /se detalla en el punto 5/.test(texto))
+      || 'debería remitir al punto 5 en vez de clasificar por su cuenta',
+  },
+  {
+    desde: 'Fortalezas consolidadas: ',
+    porque: 'el grupo sale de la distancia al ideal; Python listaba siempre las mismas 5',
+    revisar: (texto, perfil, r) => revisarLineaDelMapa(texto, r, 'cercanas'),
+  },
+  {
+    desde: 'Brechas principales: ',
+    porque: 'el grupo sale de la distancia al ideal; Python listaba siempre las mismas 3',
+    revisar: (texto, perfil, r) => revisarLineaDelMapa(texto, r, 'lejanas'),
+  },
+  {
+    desde: 'Brechas moderadas: ',
+    porque: 'el grupo sale de la distancia al ideal; Python listaba siempre las mismas 2',
+    revisar: (texto, perfil, r) => revisarLineaDelMapa(texto, r, 'intermedias'),
+  },
+  {
     desde: 'En términos del modelo Situacional',
     porque: 'el estilo menos desarrollado se calcula; Python decía "Directivo" siempre',
     revisar: (texto, perfil) => texto.indexOf('El estilo ' + perfil.menosDesarrollado.nombre) >= 0
@@ -156,41 +179,161 @@ const DIVERGENCIAS = [
 ];
 
 /**
- * Lo mismo para una celda: el fundamento de la competencia 2 afirmaba "el menos
- * desarrollado del perfil" con el Directivo en P75 o P10 de perfiles donde no lo
- * era. Ahora eso se dice sólo cuando es cierto, y cuando lo es la frase queda
- * idéntica a la de Python, así que la celda sigue comparándose en esos casos.
+ * La tabla de competencias a desarrollar, que ahora tiene un número variable de
+ * filas: Python emitía las seis siempre, incluso en el perfil sin una sola brecha.
+ * La comparación literal dejó de aplicar, así que se verifica el contenido.
+ *
+ * Qué competencias corresponden se recalcula acá, no se importa de Perfil.gs, por el
+ * mismo motivo que `nivelDe`: si la condición cambiara de un lado tiene que ponerse
+ * en rojo del otro.
  */
-const DIVERGENCIA_CELDA = {
-  coincide: (texto) => /^P\d+: el menos desarrollado del perfil\./.test(texto),
-  porque: 'el fundamento afirmaba "el menos desarrollado" sin verificarlo',
-  revisar: (texto, perfil) => (perfil.menosDesarrollado.nombre === 'Directivo'
-    ? (texto.indexOf('el menos desarrollado del perfil') >= 0
-      || 'el Directivo ES el menos desarrollado, la frase tendría que decirlo')
-    : (texto.indexOf('el menos desarrollado') < 0
-      || `el menos desarrollado es ${perfil.menosDesarrollado.nombre}, no debería atribuírselo al Directivo`)),
+function competenciasEsperadas(r) {
+  const cel = r.celid.percentil, cam = r.camin.percentil, con = r.conlid.percentil;
+  const neuroticismoAlto = r.neo.nivel.N === 'Alto' || r.neo.nivel.N === 'Muy Alto';
+  const esperadas = [];
+  if (cel.Laissez >= 75) esperadas.push('Reducir episodios de Laissez-Faire');
+  if (cam.Dir < 50) esperadas.push('Fortalecer el Liderazgo Directivo');
+  if (cel.RecCont < 50) esperadas.push('Incrementar la Recompensa Contingente');
+  if (cel.Carisma < 50 || cel.EstimInt < 50) {
+    const cuales = [];
+    if (cel.Carisma < 50) cuales.push('Carisma');
+    if (cel.EstimInt < 50) cuales.push('Estimulación Intelectual');
+    esperadas.push('Desarrollar ' + cuales.join(' y '));
+  }
+  if (neuroticismoAlto) esperadas.push('Gestionar la autorregulación emocional');
+  if (neuroticismoAlto || con.Camb < 50) esperadas.push('Resiliencia y Gestión del Cambio');
+  return esperadas.length ? esperadas : ['Sin competencias con brecha'];
+}
+
+const DIVERGENCIA_TABLA = {
+  coincide: (bloque) => bloque && bloque.tipo === 'tabla' && bloque.filas[0]
+    && bloque.filas[0][0].texto === 'Competencia a desarrollar',
+  porque: 'las competencias se emiten cuando corresponden; Python emitía las 6 siempre',
+  revisar: (tabla, r, perfil) => {
+    const problemas = [];
+    const filas = tabla.filas.slice(1);
+    // Sin brechas la fila única no va numerada; con brechas, cada una lleva su número.
+    const titulos = filas.map((f) => f[0].texto.replace(/^\d+\. /, ''));
+    const esperadas = competenciasEsperadas(r);
+    if (titulos.join(' | ') !== esperadas.join(' | ')) {
+      problemas.push(`emite [${titulos.join(', ')}] y corresponden [${esperadas.join(', ')}]`);
+    }
+    if (esperadas.length > 1 || esperadas[0] !== 'Sin competencias con brecha') {
+      filas.forEach((f, i) => {
+        if (f[0].texto !== `${i + 1}. ${titulos[i]}`) {
+          problemas.push(`la fila ${i} no está numerada como ${i + 1}`);
+        }
+      });
+    }
+    const fundamentos = filas.map((f) => f[1].texto).join(' ');
+    if (/nivel moderado/.test(fundamentos)) {
+      problemas.push('todavía hay un fundamento que afirma "nivel moderado" sin mirarlo');
+    }
+    const directivo = filas.find((f) => /Liderazgo Directivo/.test(f[0].texto));
+    if (directivo && /el menos desarrollado/.test(directivo[1].texto)
+      && perfil.menosDesarrollado.nombre !== 'Directivo') {
+      problemas.push(`dice que el Directivo es el menos desarrollado y lo es ${perfil.menosDesarrollado.nombre}`);
+    }
+    const amabilidadAlta = r.neo.nivel.A === 'Alto' || r.neo.nivel.A === 'Muy Alto';
+    if (/Amabilidad/.test(fundamentos) && !amabilidadAlta) {
+      problemas.push(`invoca la Amabilidad como obstáculo con nivel ${r.neo.nivel.A} (T=${r.neo.t.A})`);
+    }
+    return problemas.length ? problemas.join('; ') : true;
+  },
 };
 
 /**
- * Neutraliza las celdas que divergen a propósito, después de verificarlas aparte.
- * Devuelve los problemas encontrados; deja las dos celdas iguales para que la
- * comparación profunda no las marque.
+ * Los 14 ejes del radar en el orden de RADAR_ETIQUETAS, con el nombre largo que usa
+ * la prosa. Reescritos acá por el mismo motivo que todo lo demás de este archivo.
  */
-function resolverCeldasDivergentes(esperado, obtenido, perfil) {
-  const problemas = [];
-  if (!esperado || esperado.tipo !== 'tabla' || !obtenido || obtenido.tipo !== 'tabla') return problemas;
-  esperado.filas.forEach((fila, f) => {
-    fila.forEach((celda, c) => {
-      if (!DIVERGENCIA_CELDA.coincide(celda.texto)) return;
-      const otra = obtenido.filas[f] && obtenido.filas[f][c];
-      if (!otra) return;
-      const veredicto = DIVERGENCIA_CELDA.revisar(otra.texto, perfil);
-      if (veredicto !== true) {
-        problemas.push(`celda[${f}][${c}] (${DIVERGENCIA_CELDA.porque}): ${veredicto}`);
-      }
-      celda.texto = otra.texto; // ya verificada: se saca de la comparación literal
-    });
+const DIMS_RADAR = [
+  'Carisma', 'Estimulación Intelectual', 'Inspiración', 'Consideración Individualizada',
+  'Laissez-Faire', 'Recompensa Contingente', 'Dirección por Excepción',
+  'Liderazgo Directivo', 'Liderazgo Considerado', 'Liderazgo Participativo',
+  'Orientado a Metas', 'Conductas de Tarea', 'Conductas de Relaciones', 'Conductas de Cambio',
+];
+
+/** Qué dimensiones caen en cada grupo, por su distancia al perfil ideal del radar. */
+function grupoDelMapa(r, cual) {
+  return DIMS_RADAR.filter((_, i) => {
+    const d = r.radar.ideal[i] - r.radar.evaluado[i];
+    if (cual === 'cercanas') return d <= 10;
+    if (cual === 'lejanas') return d >= 30;
+    return d > 10 && d < 30;
   });
+}
+
+/** Revisa que una línea del mapa liste exactamente su grupo, ni más ni menos. */
+function revisarLineaDelMapa(texto, r, cual) {
+  const esperadas = grupoDelMapa(r, cual);
+  const faltan = esperadas.filter((n) => texto.indexOf(n + ' (P') < 0);
+  const sobran = DIMS_RADAR
+    .filter((n) => esperadas.indexOf(n) < 0 && texto.indexOf(n + ' (P') >= 0);
+  const problemas = [];
+  if (faltan.length) problemas.push(`faltan ${faltan.join(', ')}`);
+  if (sobran.length) problemas.push(`sobran ${sobran.join(', ')}`);
+  if (!esperadas.length && !/ninguna dimensión/.test(texto)) {
+    problemas.push('el grupo está vacío y la línea no lo dice');
+  }
+  return problemas.length ? problemas.join('; ') : true;
+}
+
+/**
+ * Invariante de HU2, verificada en vez de asumida.
+ *
+ * El mapa clasifica por distancia al perfil ideal —que exige distinto de cada
+ * dimensión— y el punto 5 por percentil absoluto con un corte plano. Son reglas
+ * distintas, así que no pueden compartir el vocabulario: un Liderazgo Participativo
+ * en P75 es fortaleza para el punto 5 y queda a 15 puntos de su ideal para el mapa.
+ * Con las palabras viejas el informe se contradecía en 4 de los 29 casos.
+ *
+ * Se revisan dos cosas:
+ *
+ *   1. La sección 4 no usa los términos del punto 5. Es lo que mantiene la separación
+ *      viva: sin esto, alcanza con que alguien "mejore la redacción" para que la
+ *      contradicción vuelva.
+ *   2. Ninguna dimensión aparece a la vez entre las más cercanas al ideal y entre las
+ *      áreas de desarrollo del punto 5. Eso no debería pasar nunca —los ideales están
+ *      entre P70 y P90, así que estar cerca implica percentil alto— y se midió en 0
+ *      de 24.084 pares; queda verificado en cada corrida en vez de confiado.
+ */
+const PARES_MAPA_SINTESIS = [
+  ['Laissez-Faire', 'Tendencia Laissez-Faire'],
+  ['Liderazgo Directivo', 'Liderazgo Directivo'],
+  ['Recompensa Contingente', 'Recompensa Contingente'],
+  ['Carisma', 'Carisma e Influencia Simbólica'],
+  ['Estimulación Intelectual', 'Estimulación Intelectual'],
+  ['Conductas de Tarea', 'Conductas de Tarea'],
+];
+
+function revisarMapaContraSintesis(bloques) {
+  const texto = (b) => (b.tramos || []).map((t) => t.texto).join('');
+  const problemas = [];
+
+  const inicio = bloques.findIndex((b) => texto(b).indexOf('4. GRÁFICO DE COHERENCIA') === 0);
+  const fin = bloques.findIndex((b, i) => i > inicio && texto(b).indexOf('5. Síntesis') === 0);
+  if (inicio >= 0 && fin > inicio) {
+    const seccion4 = bloques.slice(inicio, fin).map(texto).join(' ');
+    ['Fortalezas consolidadas', 'Brechas principales', 'Brechas moderadas']
+      .filter((t) => seccion4.indexOf(t) >= 0)
+      .forEach((t) => problemas.push(
+        `la sección 4 usa "${t}", que es vocabulario del punto 5 con otra regla detrás`));
+  }
+
+  const cercanas = bloques.filter((b) => b.tipo === 'parrafo')
+    .map(texto).find((t) => t.indexOf('Menor distancia al perfil ideal: ') === 0) || '';
+  const desde = bloques.findIndex((b) => b.tipo === 'parrafo'
+    && texto(b) === 'Principales Áreas de Desarrollo');
+  const hasta = bloques.findIndex((b, i) => i > desde && b.tipo === 'parrafo'
+    && texto(b) === 'Objetivos de Desarrollo Sugeridos');
+  if (desde >= 0 && hasta > desde) {
+    const areas = bloques.slice(desde + 1, hasta).map(texto).join(' ');
+    PARES_MAPA_SINTESIS
+      .filter(([enMapa, enSintesis]) => cercanas.indexOf(enMapa + ' (P') >= 0
+        && areas.indexOf(enSintesis + ' (') >= 0)
+      .forEach(([enMapa]) => problemas.push(
+        `${enMapa} está entre las más cercanas al ideal y a la vez es área de desarrollo en el punto 5`));
+  }
   return problemas;
 }
 
@@ -288,7 +431,7 @@ function main() {
     const obtenido = normalizar(body.bloques);
     const esperado = informe.bloques;
 
-    const diferencias = [];
+    const diferencias = revisarMapaContraSintesis(obtenido);
     if (esperado.length !== obtenido.length) {
       diferencias.push(`cantidad de bloques: python=${esperado.length} js=${obtenido.length}`);
     }
@@ -307,8 +450,15 @@ function main() {
         }
         continue;
       }
-      const deCeldas = resolverCeldasDivergentes(esperado[i], obtenido[i], perfilDelCaso);
-      if (deCeldas.length) diferencias.push(...deCeldas);
+      if (DIVERGENCIA_TABLA.coincide(esperado[i])) {
+        const veredicto = DIVERGENCIA_TABLA.coincide(obtenido[i])
+          ? DIVERGENCIA_TABLA.revisar(obtenido[i], resultados, perfilDelCaso)
+          : 'se esperaba la tabla de competencias';
+        if (veredicto !== true) {
+          diferencias.push(`bloque[${i}] (${DIVERGENCIA_TABLA.porque}): ${veredicto}`);
+        }
+        continue;
+      }
       if (esperado[i] && esperado[i].tipo === 'imagen') {
         if (!obtenido[i] || obtenido[i].tipo !== 'imagen') {
           diferencias.push(`bloque[${i}]: se esperaba una imagen, js=${resumir(obtenido[i])}`);
@@ -352,7 +502,10 @@ function verificarTamanoDelRadar() {
   const gs = cargarGs();
   const cuerpo = new Body();
   const radarFalso = { ancho: 800, alto: 660 };
-  gs.seccionGrafico(cuerpo, 'Ana Pérez', radarFalso, {}, {}, {});
+  // El vector del radar no importa acá —lo que se mide es el tamaño de la imagen—
+  // pero la lectura del mapa lo recorre, así que tiene que estar completo.
+  const vector = { ideal: new Array(14).fill(75), evaluado: new Array(14).fill(75) };
+  gs.seccionGrafico(cuerpo, 'Ana Pérez', radarFalso, vector, 25);
   const imagen = (cuerpo.bloques || []).find((b) => b.tipo === 'imagen');
 
   const esperadoPx = Math.round(gs.ANCHO_GRAFICO_PT * 96 / 72);

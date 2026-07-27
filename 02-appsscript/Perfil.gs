@@ -337,6 +337,263 @@ function fraseHallazgo(cam, cel) {
     + '. El perfil no presenta la tensión entre acompañamiento cercano y no-intervención.';
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Brechas de desarrollo — una sola regla para las dos secciones que la usan
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Qué dimensiones quedan por debajo del corte de desarrollo.
+ *
+ * Las condiciones NO son nuevas: son exactamente las que la síntesis del punto 5
+ * (`sintesisDeterminista` en Documento.gs) ya venía aplicando. La tabla de
+ * competencias de la sección 3 las ignoraba y emitía sus seis filas siempre, con
+ * fundamentos que el dato podía desmentir. Extraerlas acá y hacer que las dos
+ * secciones consuman la misma función es lo que impide que vuelvan a separarse: es
+ * la contradicción entre secciones que describe HU2, resuelta por construcción en
+ * vez de por cuidado al escribir.
+ *
+ * Los cortes son los que ya estaban, con sus defectos declarados: fortaleza >= 75,
+ * brecha < 50, la banda P50–P74 muda, y el Laissez-Faire al revés. No se tocan acá.
+ * Unificarlos es la pregunta 3 al PO; moverlos por cuenta propia cambiaría el
+ * contenido de todos los informes sin que nadie lo haya firmado.
+ */
+function brechasDeDesarrollo(neo, cel, cam, con) {
+  var neuroticismoAlto = neo.nivel.N === 'Alto' || neo.nivel.N === 'Muy Alto';
+  return {
+    laissez: cel.Laissez >= 75,
+    directivo: cam.Dir < 50,
+    recompensa: cel.RecCont < 50,
+    dirExcepcion: cel.DirExc < 50,
+    carisma: cel.Carisma < 50,
+    estimInt: cel.EstimInt < 50,
+    tarea: con.Tar < 50,
+    cambio: con.Camb < 50,
+    autorregulacion: neuroticismoAlto
+  };
+}
+
+/**
+ * Sección 3 — la tabla "Competencias a desarrollar".
+ *
+ * Antes eran seis filas fijas, emitidas las seis en todos los informes, incluido el
+ * perfil sin una sola brecha. Ahora cada competencia aparece cuando su condición se
+ * cumple, y la numeración se arma con las que quedaron.
+ *
+ * Las acciones de desarrollo sí siguen siendo texto fijo por competencia, y eso está
+ * bien: son el catálogo de intervenciones, no una afirmación sobre el evaluado. Lo
+ * que se verifica es que la competencia corresponda y que su fundamento no diga nada
+ * que el dato desmienta.
+ *
+ * @return {Array<Array<string>>} filas [competencia, fundamento, acción], numeradas.
+ */
+function competenciasADesarrollar(neo, cel, cam, con, perfil) {
+  var b = brechasDeDesarrollo(neo, cel, cam, con);
+  var filas = [];
+
+  if (b.laissez) {
+    // La Amabilidad se nombra sólo si está alta. El fundamento decía "Alta
+    // Amabilidad (T=…)" con T=30 y todo, que es lo contrario de alta.
+    var amabilidadAlta = neo.nivel.A === 'Alto' || neo.nivel.A === 'Muy Alto';
+    filas.push(['Reducir episodios de Laissez-Faire',
+      'P' + cel.Laissez + ': tendencia a la no-intervención.'
+        + (amabilidadAlta
+          ? ' Amabilidad ' + neo.nivel.A.toLowerCase().replace('alto', 'alta')
+            + ' (T=' + neo.t.A + ') puede dificultar la confrontación.'
+          : ''),
+      'Definir criterios de cuándo intervenir vs. delegar. Formación en gestión del conflicto y toma de decisiones difíciles.']);
+  }
+
+  if (b.directivo) {
+    filas.push(['Fortalecer el Liderazgo Directivo',
+      'P' + cam.Dir + ': ' + (perfil.menosDesarrollado.nombre === 'Directivo'
+        ? 'el menos desarrollado del perfil'
+        : 'nivel ' + nivelPorPercentil(cam.Dir).toLowerCase())
+        + '. Necesario en situaciones de baja madurez o alta urgencia.',
+      'Práctica de comunicación de expectativas claras. Role-play de conversaciones directivas. Feedback de corrección oportuno.']);
+  }
+
+  if (b.recompensa) {
+    filas.push(['Incrementar la Recompensa Contingente',
+      'P' + cel.RecCont + ': nivel ' + nivelPorPercentil(cel.RecCont).toLowerCase()
+        + '. El buen desempeño puede no sentirse sistemáticamente reconocido.',
+      'Implementar reconocimiento contingente explícito. Formalizar acuerdos de desempeño + recompensa.']);
+  }
+
+  if (b.carisma || b.estimInt) {
+    // Se nombra sólo la que está por debajo del corte, y la acción se arma con las
+    // que correspondan. Con las dos, la fila queda igual que la del informe original.
+    var cuales = [];
+    if (b.carisma) {
+      cuales.push({ nombre: 'Carisma', percentil: cel.Carisma, rasgo: 'influencia simbólica',
+        accion: 'Entrenamiento en storytelling y relato de propósito.' });
+    }
+    if (b.estimInt) {
+      cuales.push({ nombre: 'Estimulación Intelectual', percentil: cel.EstimInt,
+        rasgo: 'cuestionamiento analítico',
+        accion: 'Incorporar desafíos intelectuales al equipo.' });
+    }
+    filas.push(['Desarrollar ' + enumerar(cuales.map(function (c) { return c.nombre; })),
+      enumerar(cuales.map(function (c) {
+        return c.nombre + ' P' + c.percentil + ' (nivel ' + nivelPorPercentil(c.percentil).toLowerCase() + ')';
+      })) + ': ' + enumerar(cuales.map(function (c) { return c.rasgo; }))
+        + ' por debajo del corte de desarrollo.',
+      cuales.map(function (c) { return c.accion; }).join(' ')]);
+  }
+
+  if (b.autorregulacion) {
+    // "sostener el estilo Considerado" sólo si el Considerado está alto: era otro
+    // supuesto del informe viejo, que daba ese estilo por sentado.
+    var sostiene = nivelPorPercentil(cam.Cons) === 'Alto' ? 'el estilo Considerado' : 'el rol';
+    filas.push(['Gestionar la autorregulación emocional',
+      'Neuroticismo T=' + neo.t.N + ' (' + neo.nivel.N + '): base para sostener '
+        + sostiene + ' sin agotamiento.',
+      'Técnicas de gestión del estrés. Establecer rutinas de recuperación. Coaching ejecutivo.']);
+  }
+
+  if (b.autorregulacion || b.cambio) {
+    filas.push(['Resiliencia y Gestión del Cambio',
+      'Neuroticismo T=' + neo.t.N + ' (' + neo.nivel.N + ') y Conductas de Cambio P'
+        + con.Camb + ': la capacidad de mantener la calma bajo presión y gestionar la '
+        + 'incertidumbre es clave para liderar transformaciones sostenidas.',
+      'Formación en liderazgo en entornos de incertidumbre. Prácticas de mindfulness y regulación emocional. Construcción de red de pares líderes. Desarrollar narrativa del cambio como herramienta de conducción.']);
+  }
+
+  // Sin brechas no se inventa un plan de desarrollo. La tabla se emite igual —con
+  // una fila que lo dice— para no dejar un encabezado suelto, y en los mismos
+  // términos que ya usa el punto 5 para este caso.
+  if (!filas.length) {
+    filas.push(['Sin competencias con brecha',
+      'Ninguna dimensión queda por debajo del corte de desarrollo que aplica el punto 5.',
+      'Sostener el perfil actual y profundizar las fortalezas identificadas.']);
+    return filas;
+  }
+
+  return filas.map(function (fila, i) {
+    return [(i + 1) + '. ' + fila[0], fila[1], fila[2]];
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Sección 4 — la lectura del radar
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Los 14 ejes del radar, en el orden de RADAR_ETIQUETAS, con el nombre largo que usa
+ * la prosa del informe (las etiquetas del gráfico van abreviadas para que entren).
+ */
+var DIMENSIONES_RADAR = [
+  { nombre: 'Carisma' },
+  { nombre: 'Estimulación Intelectual' },
+  { nombre: 'Inspiración' },
+  { nombre: 'Consideración Individualizada' },
+  { nombre: 'Laissez-Faire', invertida: true },
+  { nombre: 'Recompensa Contingente' },
+  { nombre: 'Dirección por Excepción' },
+  { nombre: 'Liderazgo Directivo' },
+  { nombre: 'Liderazgo Considerado' },
+  { nombre: 'Liderazgo Participativo' },
+  { nombre: 'Orientado a Metas' },
+  { nombre: 'Conductas de Tarea' },
+  { nombre: 'Conductas de Relaciones' },
+  { nombre: 'Conductas de Cambio' }
+];
+
+// Cuántos puntos de percentil por debajo del ideal separan cada grupo.
+var DISTANCIA_CONSOLIDADA = 10;
+var DISTANCIA_BRECHA_PRINCIPAL = 30;
+
+/**
+ * Reparte los 14 ejes del radar por su distancia al perfil ideal.
+ *
+ * La regla no se inventa acá: es la que el propio informe imprime arriba del
+ * gráfico —"las zonas donde la línea del evaluado/a se acerca al ideal representan
+ * fortalezas consolidadas; las zonas con mayor distancia indican brechas"—. Lo que
+ * faltaba era que las listas la obedecieran: eran tres listas fijas, siempre las
+ * mismas dimensiones en el mismo grupo, con el percentil real al lado.
+ *
+ * El perfil ideal es RADAR_PERFIL_IDEAL, que ya estaba en Correccion.gs y que nadie
+ * declaró nunca como norma. Sigue sin estar firmado —es la pregunta 2 al PO, la
+ * definición matemática de brecha— pero al menos ahora el texto y el dibujo dicen
+ * lo mismo.
+ *
+ * @param {Object} radar r.radar: {etiquetas, ideal, evaluado}
+ * @param {number} laissezCrudo el percentil de Laissez-Faire SIN invertir
+ */
+function lecturaDelMapa(radar, laissezCrudo) {
+  var dims = DIMENSIONES_RADAR.map(function (d, i) {
+    return {
+      nombre: d.nombre,
+      invertida: !!d.invertida,
+      ideal: radar.ideal[i],
+      // El Laissez-Faire entra al radar invertido (100 - P). El informe lo nombra
+      // con su percentil crudo, así que se guardan los dos por separado: la
+      // distancia se mide sobre el valor del gráfico, el texto muestra el crudo.
+      percentil: d.invertida ? laissezCrudo : radar.evaluado[i],
+      distancia: radar.ideal[i] - radar.evaluado[i]
+    };
+  });
+
+  var porDistancia = function (a, b) { return b.distancia - a.distancia; };
+  return {
+    consolidadas: dims.filter(function (d) { return d.distancia <= DISTANCIA_CONSOLIDADA; })
+      .sort(function (a, b) { return a.distancia - b.distancia; }),
+    principales: dims.filter(function (d) { return d.distancia >= DISTANCIA_BRECHA_PRINCIPAL; })
+      .sort(porDistancia),
+    moderadas: dims.filter(function (d) {
+      return d.distancia > DISTANCIA_CONSOLIDADA && d.distancia < DISTANCIA_BRECHA_PRINCIPAL;
+    }).sort(porDistancia)
+  };
+}
+
+/**
+ * Las tres líneas de "Lectura del mapa", en orden.
+ * Un grupo vacío se dice, no se rellena con dimensiones que no le tocan.
+ *
+ * POR QUÉ NO DICEN "fortalezas" NI "brechas", que es lo que decían antes:
+ *
+ * El mapa clasifica por distancia al perfil ideal, y el ideal exige distinto de cada
+ * dimensión (P90 al Liderazgo Participativo, P70 a la Dirección por Excepción). El
+ * punto 5 clasifica por percentil absoluto, con un corte plano en P75. Son dos
+ * preguntas distintas y las dos respuestas son legítimas, pero con las mismas
+ * palabras se contradicen: un Participativo en P75 es fortaleza para el punto 5 y
+ * queda a 15 puntos de su ideal para el mapa. Pasa en 4 de los 29 informes de
+ * referencia y en 280 de los 2007 perfiles sintéticos.
+ *
+ * Elegir cuál de las dos reglas gana no es una decisión de código: el perfil ideal es
+ * la pregunta 2 al PO y los umbrales la 3, y ninguna está respondida. Así que cada
+ * sección conserva su regla y se le saca el vocabulario compartido: el mapa habla de
+ * distancia, que es lo único que el mapa mide, y la palabra "fortaleza" queda con un
+ * solo dueño, el punto 5.
+ */
+function frasesLecturaDelMapa(radar, laissezCrudo) {
+  var m = lecturaDelMapa(radar, laissezCrudo);
+  return [
+    'Menor distancia al perfil ideal: ' + (m.consolidadas.length
+      ? listarDimensiones(m.consolidadas, false)
+      : 'ninguna dimensión llega al perfil ideal.'),
+    'Mayor distancia al perfil ideal: ' + (m.principales.length
+      ? listarDimensiones(m.principales, true)
+      : 'ninguna dimensión se aleja del ideal lo suficiente.'),
+    'Distancia intermedia: ' + (m.moderadas.length
+      ? listarDimensiones(m.moderadas, true)
+      : 'ninguna dimensión queda en distancia intermedia.')
+  ];
+}
+
+/**
+ * "Carisma (P40 vs ideal P90), Inspiración (P30 vs ideal P90)."
+ *
+ * Al Laissez-Faire no se le imprime el ideal: en el gráfico va invertido, así que
+ * su ideal (85) está en la escala dada vuelta y ponerlo al lado de un percentil
+ * crudo invitaría a compararlos, que es justo lo que no hay que hacer.
+ */
+function listarDimensiones(dims, conIdeal) {
+  return dims.map(function (d) {
+    if (d.invertida) return d.nombre + ' (P' + d.percentil + ' — invertido en gráfico)';
+    return d.nombre + ' (P' + d.percentil + (conIdeal ? ' vs ideal P' + d.ideal : '') + ')';
+  }).join(', ') + '.';
+}
+
 /** "a", "a y b", "a, b y c". La "y" pasa a "e" delante de i- o hi-, como corresponde. */
 function enumerar(items) {
   if (items.length <= 1) return items[0] || '';

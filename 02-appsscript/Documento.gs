@@ -167,7 +167,7 @@ function construirInforme(body, datos) {
   body.appendPageBreak();
   seccionPerfilIntegrado(body, neo, cel, cam, pot, con, perfil);
   body.appendPageBreak();
-  seccionGrafico(body, datos.nombre, datos.imagenRadar, cel, cam, con);
+  seccionGrafico(body, datos.nombre, datos.imagenRadar, r.radar, cel.Laissez);
   body.appendPageBreak();
   seccionSintesis(body, neo, cel, cam, pot, con, datos.sintesis);
 }
@@ -367,42 +367,23 @@ function seccionPerfilIntegrado(body, neo, cel, cam, pot, con, perfil) {
 
   parrafo(body, 'Proyección hacia el Liderazgo Situacional — Competencias a desarrollar:', { negrita: true });
   body.appendParagraph('');
-  var recomendaciones = [
-    ['1. Reducir episodios de Laissez-Faire',
-      'P' + cel.Laissez + ': tendencia a la no-intervención. Alta Amabilidad (T=' + neo.t.A + ') puede dificultar la confrontación.',
-      'Definir criterios de cuándo intervenir vs. delegar. Formación en gestión del conflicto y toma de decisiones difíciles.'],
-    ['2. Fortalecer el Liderazgo Directivo',
-      // Se afirma que es el menos desarrollado sólo cuando lo es. Cuando lo es, la
-      // frase queda igual que la del informe original, así que la comparación
-      // contra Python sigue cubriendo esta celda.
-      'P' + cam.Dir + ': ' + (perfil.menosDesarrollado.nombre === 'Directivo'
-        ? 'el menos desarrollado del perfil'
-        : 'nivel ' + nivelPorPercentil(cam.Dir).toLowerCase())
-        + '. Necesario en situaciones de baja madurez o alta urgencia.',
-      'Práctica de comunicación de expectativas claras. Role-play de conversaciones directivas. Feedback de corrección oportuno.'],
-    ['3. Incrementar la Recompensa Contingente',
-      'P' + cel.RecCont + ': nivel moderado. El buen desempeño puede no sentirse sistemáticamente reconocido.',
-      'Implementar reconocimiento contingente explícito. Formalizar acuerdos de desempeño + recompensa.'],
-    ['4. Desarrollar Carisma y Estimulación Intelectual',
-      'Carisma P' + cel.Carisma + ' y EstimInt P' + cel.EstimInt + ': influencia simbólica y cuestionamiento analítico en nivel Medio.',
-      'Entrenamiento en storytelling y relato de propósito. Incorporar desafíos intelectuales al equipo.'],
-    ['5. Gestionar la autorregulación emocional',
-      'Neuroticismo T=' + neo.t.N + ' (' + neo.nivel.N + '): base para sostener el estilo Considerado sin agotamiento.',
-      'Técnicas de gestión del estrés. Establecer rutinas de recuperación. Coaching ejecutivo.'],
-    ['6. Resiliencia y Gestión del Cambio',
-      'Neuroticismo T=' + neo.t.N + ' (' + neo.nivel.N + ') y Conductas de Cambio P' + con.Camb + ': la capacidad de mantener la calma bajo presión y gestionar la incertidumbre es clave para liderar transformaciones sostenidas.',
-      'Formación en liderazgo en entornos de incertidumbre. Prácticas de mindfulness y regulación emocional. Construcción de red de pares líderes. Desarrollar narrativa del cambio como herramienta de conducción.']
-  ];
+  // Cada competencia aparece cuando su condición se cumple, y la condición es la
+  // misma que aplica la síntesis del punto 5. Antes eran seis filas fijas, emitidas
+  // las seis incluso en un perfil sin brechas. Ver Perfil.gs.
+  var recomendaciones = competenciasADesarrollar(neo, cel, cam, con, perfil);
   var tabla = agregarTabla(body, ['Competencia a desarrollar', 'Fundamento', 'Acción de desarrollo sugerida'], recomendaciones);
   recomendaciones.forEach(function (fila, i) {
     ponerCelda(tabla, i + 1, 0, fila[0], { negrita: true });
   });
 }
 
-function seccionGrafico(body, nombre, imagenRadar, cel, cam, con) {
+function seccionGrafico(body, nombre, imagenRadar, radar, laissez) {
   var p = body.appendParagraph('');
   textoNegrita(p, '4. GRÁFICO DE COHERENCIA PERSONALIDAD VS CONDUCTAS DE LIDERAZGO.', { tamano: 13 });
-  parrafo(body, 'El siguiente gráfico contrasta el perfil de ' + nombre + ' con el perfil ideal de un Líder Situacional. Las zonas donde la línea del evaluado/a (naranja) se acerca al ideal (azul) representan fortalezas consolidadas; las zonas con mayor distancia indican brechas de desarrollo.', { cursiva: true, tamano: 10 });
+  // Esta frase era la que equiparaba "cerca del ideal" con "fortaleza consolidada", y
+  // es el origen de la ambigüedad: el punto 5 usa esa misma palabra con otra regla.
+  // El gráfico muestra distancia; la clasificación vive en un solo lugar. Ver Perfil.gs.
+  parrafo(body, 'El siguiente gráfico contrasta el perfil de ' + nombre + ' con el perfil ideal de un Líder Situacional. Las zonas donde la línea del evaluado/a (naranja) se acerca al ideal (azul) son las de menor distancia al perfil de referencia; las de mayor distancia señalan dónde queda más recorrido. La clasificación de fortalezas y áreas de desarrollo se detalla en el punto 5.', { cursiva: true, tamano: 10 });
   body.appendParagraph('');
 
   var imagen = body.appendImage(imagenRadar);
@@ -417,9 +398,12 @@ function seccionGrafico(body, nombre, imagenRadar, cel, cam, con) {
 
   body.appendParagraph('');
   parrafo(body, 'Lectura del mapa:', { negrita: true });
-  parrafo(body, 'Fortalezas consolidadas: Consideración Individualizada (P' + cel.ConsInd + '), Liderazgo Considerado (P' + cam.Cons + '), Liderazgo Participativo (P' + cam.Part + '), Orientado a Metas (P' + cam.Or + '), Conductas de Relaciones (P' + con.Rel + ').');
-  parrafo(body, 'Brechas principales: Laissez-Faire (P' + cel.Laissez + ' — invertido en gráfico), Carisma (P' + cel.Carisma + ' vs ideal P90), Estimulación Intelectual (P' + cel.EstimInt + ' vs ideal P85).');
-  parrafo(body, 'Brechas moderadas: Liderazgo Directivo (P' + cam.Dir + ' vs ideal P75) y Conductas de Tarea (P' + con.Tar + ' vs ideal P75).');
+  // Las tres listas eran fijas: siempre las mismas dimensiones en el mismo grupo,
+  // con el percentil real al lado. Ahora salen de la distancia al perfil ideal, que
+  // es la regla que el párrafo de arriba ya declaraba. Ver Perfil.gs.
+  frasesLecturaDelMapa(radar, laissez).forEach(function (linea) {
+    parrafo(body, linea);
+  });
 }
 
 /**
@@ -526,33 +510,40 @@ function sintesisDeterminista(body, neo, cel, cam, pot, con) {
 
   body.appendParagraph('');
   parrafo(body, 'Principales Áreas de Desarrollo', { negrita: true, tamano: 11 });
+  // Las condiciones salen de brechasDeDesarrollo (Perfil.gs), que es la misma
+  // función que decide la tabla de competencias de la sección 3. Antes cada sección
+  // tenía su propia copia y sólo una de las dos miraba el dato.
+  var b = brechasDeDesarrollo(neo, cel, cam, con);
   var areas = [];
-  if (cel.Laissez >= 75) areas.push('Tendencia Laissez-Faire (P' + cel.Laissez + '): reducir los episodios de no-intervención o delegación sin acompañamiento, especialmente con colaboradores de menor madurez.');
-  if (cam.Dir < 50) areas.push('Liderazgo Directivo (P' + cam.Dir + '): fortalecer la capacidad de dar instrucciones claras y establecer expectativas no negociables en situaciones de urgencia.');
-  if (cel.RecCont < 50) areas.push('Recompensa Contingente (P' + cel.RecCont + '): implementar un sistema explícito y sistemático de reconocimiento del buen desempeño.');
-  if (cel.Carisma < 50) areas.push('Carisma e Influencia Simbólica (P' + cel.Carisma + '): desarrollar el impacto simbólico y la capacidad de inspirar a través del relato y la comunicación.');
-  if (cel.EstimInt < 50) areas.push('Estimulación Intelectual (P' + cel.EstimInt + '): incorporar el cuestionamiento analítico y el desafío intelectual como herramientas de desarrollo del equipo.');
-  if (con.Tar < 50) areas.push('Conductas de Tarea (P' + con.Tar + '): fortalecer el monitoreo sistemático y la definición explícita de estándares de desempeño.');
-  if (neo.nivel.N === 'Alto' || neo.nivel.N === 'Muy Alto') areas.push('Autorregulación Emocional (Neuroticismo ' + neo.nivel.N + ', T=' + neo.t.N + '): desarrollar estrategias para gestionar la reactividad emocional bajo presión sostenida.');
+  if (b.laissez) areas.push('Tendencia Laissez-Faire (P' + cel.Laissez + '): reducir los episodios de no-intervención o delegación sin acompañamiento, especialmente con colaboradores de menor madurez.');
+  if (b.directivo) areas.push('Liderazgo Directivo (P' + cam.Dir + '): fortalecer la capacidad de dar instrucciones claras y establecer expectativas no negociables en situaciones de urgencia.');
+  if (b.recompensa) areas.push('Recompensa Contingente (P' + cel.RecCont + '): implementar un sistema explícito y sistemático de reconocimiento del buen desempeño.');
+  if (b.carisma) areas.push('Carisma e Influencia Simbólica (P' + cel.Carisma + '): desarrollar el impacto simbólico y la capacidad de inspirar a través del relato y la comunicación.');
+  if (b.estimInt) areas.push('Estimulación Intelectual (P' + cel.EstimInt + '): incorporar el cuestionamiento analítico y el desafío intelectual como herramientas de desarrollo del equipo.');
+  if (b.tarea) areas.push('Conductas de Tarea (P' + con.Tar + '): fortalecer el monitoreo sistemático y la definición explícita de estándares de desempeño.');
+  if (b.autorregulacion) areas.push('Autorregulación Emocional (Neuroticismo ' + neo.nivel.N + ', T=' + neo.t.N + '): desarrollar estrategias para gestionar la reactividad emocional bajo presión sostenida.');
   if (!areas.length) areas.push('El perfil no presenta brechas significativas. Ver análisis detallado en secciones anteriores.');
   vinetas(body, areas);
 
   body.appendParagraph('');
   parrafo(body, 'Objetivos de Desarrollo Sugeridos', { negrita: true, tamano: 11 });
   var objetivos = [];
-  if (cel.Laissez >= 75 || cam.Dir < 50) {
+  if (b.laissez || b.directivo) {
     objetivos.push('Ampliar el repertorio directivo: practicar la intervención activa ante desvíos y la comunicación de expectativas no negociables. Definir criterios explícitos de cuándo dirigir, cuándo acompañar y cuándo delegar según la madurez del colaborador.');
   }
-  if (cel.RecCont < 50 || cel.DirExc < 50) {
+  if (b.recompensa || b.dirExcepcion) {
     objetivos.push('Implementar un sistema de reconocimiento contingente: formalizar acuerdos de desempeño con recompensas asociadas y pasar de un reconocimiento espontáneo a uno sistemático y oportuno.');
   }
-  if (cel.Carisma < 50 || cel.EstimInt < 50) {
+  if (b.carisma || b.estimInt) {
     objetivos.push('Desarrollar el impacto transformacional: entrenamiento en storytelling, relato de propósito compartido e incorporación de espacios de innovación y desafío intelectual en la dinámica del equipo.');
   }
+  // Este corte NO es el de `autorregulacion`: acá alcanza con que el Neuroticismo no
+  // sea bajo. Es una condición distinta, más amplia, y se deja como estaba: cambiarla
+  // movería el contenido de los informes, que no es lo que esta corrección hace.
   if (neo.nivel.N !== 'Bajo' && neo.nivel.N !== 'Muy Bajo') {
     objetivos.push('Fortalecer la autorregulación emocional: técnicas de gestión del estrés, rutinas de recuperación y construcción de una red de apoyo entre líderes del mismo nivel.');
   }
-  if (con.Tar < 50) {
+  if (b.tarea) {
     objetivos.push('Consolidar las conductas de tarea: establecer rutinas de monitoreo de indicadores, definir estándares explícitos de desempeño y practicar el feedback de corrección de manera sistemática.');
   }
   if (!objetivos.length) {
