@@ -90,6 +90,87 @@ function leerCorridas(historialId, limite) {
  * esperas encoladas y siguen siendo un tiempo que un botón puede sostener sin
  * que parezca colgado.
  */
+/**
+ * Saca el ID de Drive de la URL guardada en el historial.
+ *
+ * `registrarCorrida` guarda lo que devuelve `archivo.getUrl()`, que hoy tiene la
+ * forma `https://drive.google.com/file/d/<id>/view?usp=drivesdk`. Se contempla
+ * también la forma vieja con `?id=<id>`, porque el historial es acumulativo y
+ * puede tener filas de cuando Drive devolvía la otra.
+ *
+ * @return {string} el ID, o '' si la URL no tiene forma de link de Drive
+ */
+function idDeUrlDeDrive(url) {
+  var texto = String(url || '');
+  var porRuta = texto.match(/\/d\/([-\w]+)/);
+  if (porRuta) return porRuta[1];
+  var porQuery = texto.match(/[?&]id=([-\w]+)/);
+  return porQuery ? porQuery[1] : '';
+}
+
+/**
+ * Compara el historial contra los archivos que hay de verdad en la carpeta.
+ *
+ * Existe porque "Últimos informes" NO lee Drive: sale del Sheet. Las dos fuentes
+ * pueden separarse sin que nadie se entere —un informe borrado a mano, uno movido
+ * de carpeta, uno generado cuando el registro falló— y la lista seguiría
+ * mostrando links que no llevan a ningún lado.
+ *
+ * Es sólo de lectura: informa, no corrige. Qué hacer con una diferencia es una
+ * decisión de quien mira, no del script.
+ *
+ * @return {Object} {filas, archivos, sinArchivo[], sinFila[], sinUrl[]}
+ */
+function compararHistorialConDrive(historialId, carpetaId, limite) {
+  var corridas = leerCorridas(historialId, limite || 5000);
+
+  var enCarpeta = {};
+  var archivos = DriveApp.getFolderById(carpetaId).getFiles();
+  while (archivos.hasNext()) {
+    var archivo = archivos.next();
+    enCarpeta[archivo.getId()] = archivo.getName();
+  }
+
+  var sinArchivo = [];
+  var sinUrl = [];
+  var referenciados = {};
+
+  corridas.forEach(function (corrida) {
+    var id = idDeUrlDeDrive(corrida.informeUrl);
+    if (!id) {
+      // Fila sin link utilizable: no se puede ni buscar el archivo.
+      sinUrl.push({ fila: corrida.fila, evaluado: corrida.evaluado, informeUrl: corrida.informeUrl });
+      return;
+    }
+    referenciados[id] = true;
+    if (enCarpeta[id]) return;
+
+    // No está en la carpeta. Distinguir por qué: borrado, en la papelera o movido
+    // a otro lado son tres problemas distintos y se arreglan distinto.
+    var motivo;
+    try {
+      motivo = DriveApp.getFileById(id).isTrashed()
+        ? 'en la papelera'
+        : 'fuera de la carpeta de informes';
+    } catch (e) {
+      motivo = 'no existe';
+    }
+    sinArchivo.push({ fila: corrida.fila, evaluado: corrida.evaluado, id: id, motivo: motivo });
+  });
+
+  var sinFila = Object.keys(enCarpeta)
+    .filter(function (id) { return !referenciados[id]; })
+    .map(function (id) { return { id: id, nombre: enCarpeta[id] }; });
+
+  return {
+    filas: corridas.length,
+    archivos: Object.keys(enCarpeta).length,
+    sinArchivo: sinArchivo,
+    sinFila: sinFila,
+    sinUrl: sinUrl
+  };
+}
+
 var ESPERA_LOCK_MS = 10000;
 
 /**
