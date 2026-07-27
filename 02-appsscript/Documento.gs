@@ -309,17 +309,21 @@ function seccionCualitativa(body, neo, cel, celv, cam, pot, con, nivel, perfil) 
   // los informes. Ver Perfil.gs.
   parrafo(body, frasePerfilCelid(perfil));
 
+  // Las tres frases salen del percentil de cada escala. Antes repartían roles fijos:
+  // las mismas dos subescalas eran fortalezas siempre, las otras dos zonas de
+  // crecimiento siempre, el Transaccional estaba "moderado" siempre y el
+  // Laissez-Faire era "zona de mayor atención" incluso en P5. Ver Perfil.gs.
   var p3 = body.appendParagraph('');
   textoNegrita(p3, 'Liderazgo Transformacional : ');
-  textoNormal(p3, 'P' + cel.TransfTot + '. Con fortalezas en Consideración Individualizada (' + dec(celv.ConsInd) + ' / P' + cel.ConsInd + ') e Inspiración (' + dec(celv.Inspir) + ' / P' + cel.Inspir + '). El Carisma (' + dec(celv.Carisma) + ' / P' + cel.Carisma + ') y la Estimulación Intelectual (' + dec(celv.EstimInt) + ' / P' + cel.EstimInt + ') son zonas de crecimiento.');
+  textoNormal(p3, fraseTransformacional(cel, celv));
 
   var p4 = body.appendParagraph('');
   textoNegrita(p4, 'Liderazgo Transaccional : ');
-  textoNormal(p4, 'P' + cel.TransTot + '. Dirección por Excepción (P' + cel.DirExc + ') y Recompensa Contingente (P' + cel.RecCont + ') en niveles moderados. Interviene ante desvíos pero podría fortalecer el reconocimiento sistemático del buen desempeño.');
+  textoNormal(p4, fraseTransaccional(cel));
 
   var p5 = body.appendParagraph('');
   textoNegrita(p5, 'Laissez-Faire : ');
-  textoNormal(p5, 'P' + cel.Laissez + '. Zona de mayor atención. Puede presentar tendencia a la no-intervención o delegación sin acompañamiento. En contextos de equipo maduro puede ser una fortaleza, pero ante colaboradores con menor madurez puede generar falta de dirección.');
+  textoNormal(p5, fraseLaissez(cel));
   body.appendParagraph('');
 
   parrafo(body, '2.3 Motivación y Conductas de Liderazgo (POTENLID, CAMIN-A, CONLID-A): potencialidades y motivaciones esperables que se observen en el evaluado/a.', { negrita: true });
@@ -354,7 +358,9 @@ function seccionPerfilIntegrado(body, neo, cel, cam, pot, con, perfil) {
     + ' (E T=' + neo.t.E + ') y motivación intrínseca ' + nivelPorPercentil(pot.Intr).toLowerCase()
     + ' (P' + pot.Intr + ').');
   body.appendParagraph('');
-  parrafo(body, 'El hallazgo más relevante del perfil es la combinación de un alto Liderazgo Considerado (P' + cam.Cons + ') y Participativo (P' + cam.Part + ') con una presencia de Laissez-Faire (P' + cel.Laissez + '). Esta tensión sugiere que el/la evaluado/a puede alternar entre un acompañamiento muy cercano y episodios de delegación sin el acompañamiento necesario, especialmente en conflictos o decisiones difíciles.');
+  // La tensión se afirma sólo cuando está: antes se daba por hecho que el Considerado
+  // y el Participativo estaban altos y que había Laissez-Faire presente. Ver Perfil.gs.
+  parrafo(body, fraseHallazgo(cam, cel));
   body.appendParagraph('');
   parrafo(body, fraseSituacional(perfil, cam));
   body.appendParagraph('');

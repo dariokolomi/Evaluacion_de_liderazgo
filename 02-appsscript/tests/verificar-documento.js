@@ -20,14 +20,43 @@ const DOCUMENTO = path.join(__dirname, 'documento-python.json');
 const MAX_DIFERENCIAS = 12;
 
 /**
+ * El corte de nivel, reescrito a mano a propósito.
+ *
+ * Podría importarse de Correccion.gs, pero entonces un cambio en el corte movería a
+ * la vez el informe y la verificación, y nada se pondría en rojo. Escrito acá, la
+ * verificación es independiente y un cambio de umbral tiene que decidirse dos veces.
+ */
+function nivelDe(p) {
+  if (p >= 75) return 'Alto';
+  if (p >= 25) return 'Medio';
+  return 'Bajo';
+}
+
+/** Devuelve la oración que contiene `marca`, o '' si ninguna la tiene. */
+function oracionCon(texto, marca) {
+  return texto.split(/(?<=\.)\s+/).find((o) => o.indexOf(marca) >= 0) || '';
+}
+
+const SUBESCALAS_TRANSF = [
+  ['ConsInd', 'Consideración Individualizada'],
+  ['Inspir', 'Inspiración'],
+  ['Carisma', 'Carisma'],
+  ['EstimInt', 'Estimulación Intelectual'],
+];
+
+/**
  * Párrafos que ya NO deben coincidir con el informe de Python, a propósito.
  *
- * Python afirmaba estas tres cosas de forma fija, cualquiera fuera el resultado —el
- * primer defecto que señala HU1—. Ahora se calculan, así que la comparación literal
- * dejaría de tener sentido. En vez de saltearlos, cada uno se verifica contra la
- * clasificación que produce Perfil.gs: el párrafo sigue revisado, sólo cambia
- * contra qué. Así la comparación con Python se acota de forma deliberada y no se
- * erosiona sin que nadie se dé cuenta.
+ * Python afirmaba estas cosas de forma fija, cualquiera fuera el resultado —el primer
+ * defecto que señala HU1—. Ahora se calculan, así que la comparación literal dejaría
+ * de tener sentido. En vez de saltearlos, cada uno se verifica contra el dato que
+ * ahora lo gobierna: el párrafo sigue revisado, sólo cambia contra qué. Así la
+ * comparación con Python se acota de forma deliberada y no se erosiona sin que nadie
+ * se dé cuenta.
+ *
+ * Lo que se revisa acá es que el informe no CONTRADIGA el dato. Las reglas mismas se
+ * verifican con valores escritos a mano en verificar-perfil.js, que es lo único que
+ * pone algo en rojo cuando la regla cambia.
  *
  * `desde` es el comienzo del párrafo TAL COMO LO ESCRIBÍA PYTHON.
  */
@@ -42,6 +71,53 @@ const DIVERGENCIAS = [
         || `debería nombrar a ${perfil.estilos[0].nombre} como predominante`)),
   },
   {
+    desde: 'Liderazgo Transformacional : ',
+    porque: 'el reparto de las 4 subescalas se calcula; Python daba fortalezas a '
+      + 'ConsInd e Inspir y zonas de crecimiento a Carisma y EstimInt, siempre',
+    revisar: (texto, perfil, r) => {
+      const cel = r.celid.percentil;
+      const oracion = {
+        Alto: oracionCon(texto, 'fortaleza'),
+        Medio: oracionCon(texto, 'nivel intermedio'),
+        Bajo: oracionCon(texto, 'de crecimiento'),
+      };
+      const mal = SUBESCALAS_TRANSF
+        .filter(([clave, nombre]) => oracion[nivelDe(cel[clave])].indexOf(nombre) < 0)
+        .map(([clave, nombre]) => `${nombre} (P${cel[clave]}, ${nivelDe(cel[clave])})`);
+      return mal.length === 0
+        || `estas subescalas no están en el grupo que les toca: ${mal.join(', ')}`;
+    },
+  },
+  {
+    desde: 'Liderazgo Transaccional : ',
+    porque: 'el nivel se calcula; Python decía "en niveles moderados" siempre',
+    revisar: (texto, perfil, r) => {
+      const cel = r.celid.percentil;
+      const faltan = ['DirExc', 'RecCont']
+        .filter((k) => texto.indexOf(`en nivel ${nivelDe(cel[k]).toLowerCase()} (P${cel[k]})`) < 0);
+      if (faltan.length) return `no declara el nivel real de ${faltan.join(' y ')}`;
+      return nivelDe(cel.RecCont) !== 'Alto' || texto.indexOf('podría fortalecer') < 0
+        || `con la Recompensa Contingente en P${cel.RecCont} no puede pedir fortalecer el reconocimiento`;
+    },
+  },
+  {
+    desde: 'Laissez-Faire : ',
+    porque: 'la escala está invertida; Python la marcaba "zona de mayor atención" '
+      + 'incluso en P5, que es el valor deseable',
+    revisar: (texto, perfil, r) => {
+      const p = r.celid.percentil.Laissez;
+      const esZona = texto.indexOf('Zona de mayor atención') >= 0;
+      if (nivelDe(p) === 'Alto') {
+        return esZona || `con Laissez-Faire en P${p} sí corresponde marcar la zona de atención`;
+      }
+      if (nivelDe(p) === 'Bajo') {
+        return (!esZona && /valor deseable/.test(texto))
+          || `P${p} es bajo, o sea lo deseable: no puede ser "zona de mayor atención"`;
+      }
+      return !esZona || `P${p} es intermedio: no corresponde la zona de mayor atención`;
+    },
+  },
+  {
     desde: 'Integrando las cinco pruebas',
     porque: 'la etiqueta se calcula; Python decía "Líder Relacional-Transformacional" siempre',
     revisar: (texto, perfil) => texto.indexOf(perfil.etiqueta) >= 0
@@ -52,6 +128,30 @@ const DIVERGENCIAS = [
     porque: 'el estilo menos desarrollado se calcula; Python decía "Directivo" siempre',
     revisar: (texto, perfil) => texto.indexOf('El estilo ' + perfil.menosDesarrollado.nombre) >= 0
       || `debería nombrar a ${perfil.menosDesarrollado.nombre} como el menos desarrollado`,
+  },
+  {
+    desde: 'El hallazgo más relevante del perfil',
+    porque: 'la tensión se verifica; Python la afirmaba con Considerado y '
+      + 'Participativo en cualquier valor y sin mirar el Laissez-Faire',
+    revisar: (texto, perfil, r) => {
+      const cam = r.camin.percentil;
+      const laissez = r.celid.percentil.Laissez;
+      if (/alto Liderazgo Considerado/.test(texto) && nivelDe(cam.Cons) !== 'Alto') {
+        return `afirma un Liderazgo Considerado alto con P${cam.Cons}`;
+      }
+      if (/y Participativo \(P/.test(texto) && nivelDe(cam.Part) !== 'Alto') {
+        return `lo suma al Participativo como alto con P${cam.Part}`;
+      }
+      if (/presencia de Laissez-Faire/.test(texto) && nivelDe(laissez) === 'Bajo') {
+        return `habla de una presencia de Laissez-Faire que está en P${laissez}`;
+      }
+      const hayTension = (nivelDe(cam.Cons) === 'Alto' || nivelDe(cam.Part) === 'Alto')
+        && nivelDe(laissez) !== 'Bajo';
+      return hayTension === /Esta tensión sugiere/.test(texto)
+        || (hayTension
+          ? 'la tensión se da en este perfil y el párrafo no la reporta'
+          : 'reporta una tensión que este perfil no tiene');
+    },
   },
 ];
 
@@ -201,7 +301,7 @@ function main() {
       if (divergencia) {
         const obtenidoTexto = (obtenido[i] && obtenido[i].tramos || [])
           .map((t) => t.texto).join('');
-        const veredicto = divergencia.revisar(obtenidoTexto, perfilDelCaso);
+        const veredicto = divergencia.revisar(obtenidoTexto, perfilDelCaso, resultados);
         if (veredicto !== true) {
           diferencias.push(`bloque[${i}] (${divergencia.porque}): ${veredicto}`);
         }
