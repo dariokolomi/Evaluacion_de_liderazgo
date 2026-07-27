@@ -80,19 +80,29 @@ function crearEntorno(escenario) {
     GRUPO_AUTORIZADO: e.grupo || GRUPO,
   };
 
-  let indice = 0;
-  const iterador = {
-    hasNext: () => indice < archivos.length,
-    next: () => {
-      const a = archivos[indice++];
-      return {
-        getId: () => a.id,
-        getName: () => a.nombre,
-        getMimeType: () => a.mime,
-        getLastUpdated: () => new Date(a.actualizado),
-      };
-    },
+  // Un iterador nuevo por llamada. El de antes era uno solo y compartido, así que
+  // recorrer la carpeta dos veces devolvía vacío la segunda: el stub mentía en el
+  // sentido más peligroso, haciendo pasar un recorrido que en Drive sí trae datos.
+  const crearIterador = () => {
+    let indice = 0;
+    return {
+      hasNext: () => indice < archivos.length,
+      next: () => {
+        const a = archivos[indice++];
+        return {
+          getId: () => a.id,
+          getName: () => a.nombre,
+          getMimeType: () => a.mime,
+          getLastUpdated: () => new Date(a.actualizado),
+        };
+      },
+    };
   };
+
+  // Archivos que existen en Drive pero pueden no estar en la carpeta: es lo que
+  // consulta la comparación para distinguir "en la papelera" de "movido" de "no
+  // existe". Lo que no esté acá, no existe.
+  const enDrive = e.enDrive || {};
 
   return {
     registro,
@@ -109,7 +119,13 @@ function crearEntorno(escenario) {
           return { hasUser: () => !e.usuarioSinAcceso };
         },
       },
-      DriveApp: { getFolderById: () => ({ getFiles: () => iterador }) },
+      DriveApp: {
+        getFolderById: () => ({ getFiles: () => crearIterador() }),
+        getFileById: (id) => {
+          if (!(id in enDrive)) throw new Error('No se encontró el archivo con el id ' + id);
+          return { isTrashed: () => !!enDrive[id].papelera };
+        },
+      },
       SpreadsheetApp: {
         openById: () => ({ getSheetByName: () => hoja, insertSheet: () => hoja }),
       },
@@ -155,7 +171,8 @@ function cargarGs(globales) {
   return new Function(
     ...nombres,
     `${fuente}\nreturn { doGet, listarPlanillas, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml,
-       progresoDeInforme, marcarEtapa, limpiarProgreso, ETAPAS_INFORME, VERSION_APP };`
+       progresoDeInforme, marcarEtapa, limpiarProgreso, ETAPAS_INFORME, VERSION_APP,
+       compararHistorialConDrive, idDeUrlDeDrive };`
   )(...nombres.map((n) => globales[n]));
 }
 
@@ -253,6 +270,70 @@ function main() {
   revisar('el comentario se recorta a 500 caracteres', conCorridas.hoja.datos[1][7].length === 500);
   revisar('calificarInforme exige acceso por su cuenta',
     !!intentar(() => gsSinAcceso.calificarInforme(2, 4, '')).error);
+
+  // ── El historial contra Drive ──
+  // "Últimos informes" sale del Sheet, no de Drive. Son dos fuentes que nadie
+  // mantiene sincronizadas, así que la comparación tiene que mirar en las dos
+  // direcciones: filas sin archivo Y archivos sin fila.
+  const url = (id) => `https://drive.google.com/file/d/${id}/view?usp=drivesdk`;
+  revisar('el ID sale del link que guarda el historial',
+    gs.idDeUrlDeDrive(url('1AbC-dEf_9')) === '1AbC-dEf_9', gs.idDeUrlDeDrive(url('1AbC-dEf_9')));
+  revisar('y también de la forma vieja con ?id=, que puede haber en filas antiguas',
+    gs.idDeUrlDeDrive('https://drive.google.com/open?id=1XyZ_0') === '1XyZ_0');
+  revisar('una URL sin forma de link de Drive no inventa un ID',
+    gs.idDeUrlDeDrive('pendiente') === '' && gs.idDeUrlDeDrive('') === ''
+    && gs.idDeUrlDeDrive(null) === '');
+
+  const filaDe = (evaluado, informeUrl) => [new Date(2026, 6, 20), evaluado, 'p.xlsx', informeUrl, USUARIO, 4, '', ''];
+  const conDrive = crearEntorno({
+    filas: [
+      ENCABEZADO,
+      filaDe('Coincide', url('informe-1')),
+      filaDe('Borrado', url('informe-borrado')),
+      filaDe('En la papelera', url('informe-papelera')),
+      filaDe('Movido', url('informe-movido')),
+      filaDe('Sin link', 'pendiente'),
+    ],
+    // Lo que hay de verdad en la carpeta de informes.
+    archivos: [{ id: 'informe-1', nombre: 'Informe A.docx' }, { id: 'huerfano', nombre: 'Informe suelto.docx' }],
+    // Lo que existe en Drive aunque no esté en la carpeta.
+    enDrive: { 'informe-papelera': { papelera: true }, 'informe-movido': {} },
+  });
+  const gsDrive = cargarGs(conDrive.globales);
+  const cmp = gsDrive.compararHistorialConDrive('historial-id', 'carpeta-informes-id');
+
+  revisar('cuenta las dos fuentes por separado',
+    cmp.filas === 5 && cmp.archivos === 2, `filas=${cmp.filas} archivos=${cmp.archivos}`);
+  revisar('la fila cuyo informe sigue en la carpeta no se reporta',
+    !cmp.sinArchivo.some((f) => f.evaluado === 'Coincide'),
+    JSON.stringify(cmp.sinArchivo));
+
+  // Los tres motivos se arreglan distinto, así que no alcanza con decir "falta".
+  const motivo = (evaluado) => (cmp.sinArchivo.find((f) => f.evaluado === evaluado) || {}).motivo;
+  revisar('un informe borrado se distingue de uno en la papelera y de uno movido',
+    motivo('Borrado') === 'no existe'
+    && motivo('En la papelera') === 'en la papelera'
+    && motivo('Movido') === 'fuera de la carpeta de informes',
+    JSON.stringify(cmp.sinArchivo.map((f) => `${f.evaluado}: ${f.motivo}`)));
+
+  revisar('una fila sin link utilizable se reporta aparte, no como archivo faltante',
+    cmp.sinUrl.length === 1 && cmp.sinUrl[0].evaluado === 'Sin link'
+    && !cmp.sinArchivo.some((f) => f.evaluado === 'Sin link'),
+    JSON.stringify(cmp.sinUrl));
+
+  revisar('y en la otra dirección: un informe en la carpeta sin fila en el historial',
+    cmp.sinFila.length === 1 && cmp.sinFila[0].nombre === 'Informe suelto.docx',
+    JSON.stringify(cmp.sinFila));
+
+  const sinDiferencias = crearEntorno({
+    filas: [ENCABEZADO, filaDe('Único', url('informe-1'))],
+    archivos: [{ id: 'informe-1', nombre: 'Informe A.docx' }],
+  });
+  const limpio = cargarGs(sinDiferencias.globales)
+    .compararHistorialConDrive('historial-id', 'carpeta-informes-id');
+  revisar('cuando todo coincide, no reporta nada',
+    !limpio.sinArchivo.length && !limpio.sinFila.length && !limpio.sinUrl.length,
+    JSON.stringify(limpio));
 
   // ── El lock de la calificación ──
   // Registrar una corrida es un append y el Sheet lo serializa solo. Calificar es
