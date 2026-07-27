@@ -138,7 +138,7 @@ ok(p.aproximacion.estilos[0] === 'Transformacional',
   'un pico alto pesa más que tres dimensiones medias: no se promedia',
   JSON.stringify(p.aproximacion));
 
-p = conCelid({});
+p = conCelid({ TransfTot: 90, Laissez: 90 });
 ok(p.aproximacion.estilos.length === 1 && p.aproximacion.estilos[0] === 'Laissez-Faire',
   'si la única escala destacada es la del Laissez-Faire, se aproxima ahí',
   JSON.stringify(p.aproximacion.estilos));
@@ -325,17 +325,21 @@ ok(frase.indexOf('P80. ') === 0, 'la frase sigue abriendo con el percentil total
 
 // Las cuatro altas: no aparece ninguna zona de crecimiento inventada.
 frase = gs.fraseTransformacional(
-  cel({ ConsInd: 99, Inspir: 90, Carisma: 80, EstimInt: 75 }), MEDIAS);
+  cel({ ConsInd: 99, Inspir: 90, Carisma: 80, EstimInt: 90 }), MEDIAS);
 ok(!/crecimiento|intermedio/.test(frase),
   'con las cuatro altas no se inventa ni una zona de crecimiento ni un nivel intermedio', frase);
 ok((frase.match(/P\d+/g) || []).length === 5,
   'y las cuatro se siguen nombrando con su valor, más el total', frase);
 
-// P75 exacto entra como alto: es el corte que usa el resto del informe. Si el PO
-// resuelve que P75 no es fortaleza (pregunta 3), esta verificación tiene que caer.
+// P75 exacto NO es alto: el PO resolvió el 2026-07-27 que la fortaleza empieza por
+// encima de P75 y que P75 cae en la banda de brecha. Esta verificación decía lo
+// contrario y estaba escrita para caer justo cuando llegara la respuesta.
 frase = gs.fraseTransformacional(cel({ ConsInd: 75, Inspir: 74 }), MEDIAS);
+ok(!/fortaleza/.test(frase) && /nivel intermedio/.test(frase),
+  'P75 exacto no es fortaleza: queda en la banda intermedia', frase);
+frase = gs.fraseTransformacional(cel({ ConsInd: 90, Inspir: 74 }), MEDIAS);
 ok(/fortaleza en Consideración Individualizada/.test(frase),
-  'P75 exacto cuenta como fortaleza, y en singular cuando es una sola', frase);
+  'y el primer valor que sí es fortaleza queda en singular cuando es una sola', frase);
 ok(/Inspiración \(3\.50 \/ P74\).*nivel intermedio/.test(frase),
   'P74 no llega: queda en el nivel intermedio', frase);
 
@@ -446,15 +450,28 @@ ok(!/^\d\. /.test(filas[0][0]),
   'y esa fila única no va numerada, porque no es la primera de una lista', filas[0][0]);
 
 // Cada condición enciende su competencia y sólo la suya.
-ok(titulos(competencias({ celid: { Laissez: 75 } })).join() === '1. Reducir episodios de Laissez-Faire',
-  'P75 en Laissez-Faire enciende la competencia 1 y nada más',
-  JSON.stringify(titulos(competencias({ celid: { Laissez: 75 } }))));
-ok(titulos(competencias({ celid: { Laissez: 74 } })).join() === 'Sin competencias con brecha',
-  'P74 no llega al corte');
-ok(titulos(competencias({ camin: { Dir: 49 } })).join() === '1. Fortalecer el Liderazgo Directivo',
-  'P49 en Directivo enciende la competencia del Directivo');
-ok(titulos(competencias({ camin: { Dir: 50 } })).join() === 'Sin competencias con brecha',
-  'P50 exacto no es brecha: el corte es estricto');
+// El Laissez-Faire va al revés y la respuesta del PO no habla de la escala
+// invertida, así que su brecha se define por el nivel: "Alto en Laissez-Faire".
+// Con Alto en > P75, P75 dejó de encenderla. Antes acá decía `>= 75` y en
+// Sintesis.gs la misma brecha ya salía del nivel: discrepaban justo en P75.
+ok(titulos(competencias({ celid: { Laissez: 90 } })).join() === '1. Reducir episodios de Laissez-Faire',
+  'P90 en Laissez-Faire enciende la competencia 1 y nada más',
+  JSON.stringify(titulos(competencias({ celid: { Laissez: 90 } }))));
+ok(titulos(competencias({ celid: { Laissez: 75 } })).join() === 'Sin competencias con brecha',
+  'P75 ya no la enciende: es el mismo corte que usa la síntesis del punto 5');
+// El corte de brecha, respondido por el PO el 2026-07-27: "> P25 y <= P75 es
+// Brecha". Antes era < P50, así que P50 y P75 pasaron a contar como brecha y estos
+// dos casos cambiaron de lado.
+ok(titulos(competencias({ camin: { Dir: 50 } })).join() === '1. Fortalecer el Liderazgo Directivo',
+  'P50 ahora es brecha y enciende la competencia del Directivo',
+  JSON.stringify(titulos(competencias({ camin: { Dir: 50 } }))));
+ok(titulos(competencias({ camin: { Dir: 75 } })).join() === '1. Fortalecer el Liderazgo Directivo',
+  'P75 también: la brecha llega hasta P75 inclusive');
+ok(titulos(competencias({ camin: { Dir: 76 } })).join() === 'Sin competencias con brecha',
+  'y por encima de P75 ya no lo es');
+ok(titulos(competencias({ camin: { Dir: 90 } })).join() === 'Sin competencias con brecha',
+  'P90 tampoco, que es el valor que sigue a P75 en estos baremos: entre 76 y 89 no'
+  + ' cae ningún percentil real');
 
 // La numeración se arma con las que quedaron, no con la posición del catálogo.
 filas = competencias({ celid: { Laissez: 90, RecCont: 10 }, conlid: { Camb: 10 } });

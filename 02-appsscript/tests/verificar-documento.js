@@ -27,7 +27,7 @@ const MAX_DIFERENCIAS = 12;
  * verificación es independiente y un cambio de umbral tiene que decidirse dos veces.
  */
 function nivelDe(p) {
-  if (p >= 75) return 'Alto';
+  if (p > 75) return 'Alto';
   if (p > 25) return 'Medio';
   return 'Bajo';
 }
@@ -202,22 +202,27 @@ const DIVERGENCIAS = [
  * Qué competencias corresponden se recalcula acá, no se importa de Perfil.gs, por el
  * mismo motivo que `nivelDe`: si la condición cambiara de un lado tiene que ponerse
  * en rojo del otro.
+ *
+ * El corte de brecha es el que fijó el PO el 2026-07-27: "> P25 y <= P75 es Brecha",
+ * o sea todo lo que no supera P75. El Laissez-Faire va al revés y no se tocó.
  */
+const esBrechaEsperada = (p) => p <= 75;
+
 function competenciasEsperadas(r) {
   const cel = r.celid.percentil, cam = r.camin.percentil, con = r.conlid.percentil;
   const neuroticismoAlto = r.neo.nivel.N === 'Alto' || r.neo.nivel.N === 'Muy Alto';
   const esperadas = [];
-  if (cel.Laissez >= 75) esperadas.push('Reducir episodios de Laissez-Faire');
-  if (cam.Dir < 50) esperadas.push('Fortalecer el Liderazgo Directivo');
-  if (cel.RecCont < 50) esperadas.push('Incrementar la Recompensa Contingente');
-  if (cel.Carisma < 50 || cel.EstimInt < 50) {
+  if (nivelDe(cel.Laissez) === 'Alto') esperadas.push('Reducir episodios de Laissez-Faire');
+  if (esBrechaEsperada(cam.Dir)) esperadas.push('Fortalecer el Liderazgo Directivo');
+  if (esBrechaEsperada(cel.RecCont)) esperadas.push('Incrementar la Recompensa Contingente');
+  if (esBrechaEsperada(cel.Carisma) || esBrechaEsperada(cel.EstimInt)) {
     const cuales = [];
-    if (cel.Carisma < 50) cuales.push('Carisma');
-    if (cel.EstimInt < 50) cuales.push('Estimulación Intelectual');
+    if (esBrechaEsperada(cel.Carisma)) cuales.push('Carisma');
+    if (esBrechaEsperada(cel.EstimInt)) cuales.push('Estimulación Intelectual');
     esperadas.push('Desarrollar ' + cuales.join(' y '));
   }
   if (neuroticismoAlto) esperadas.push('Gestionar la autorregulación emocional');
-  if (neuroticismoAlto || con.Camb < 50) esperadas.push('Resiliencia y Gestión del Cambio');
+  if (neuroticismoAlto || esBrechaEsperada(con.Camb)) esperadas.push('Resiliencia y Gestión del Cambio');
   return esperadas.length ? esperadas : ['Sin competencias con brecha'];
 }
 
@@ -305,6 +310,81 @@ const DIVERGENCIA_NIVEL = {
 };
 
 /**
+ * El punto 5 determinista deja de compararse contra Python.
+ *
+ * Sus dos listas —fortalezas y áreas de desarrollo— salen de los cortes que fijó el
+ * PO el 2026-07-27 (fortaleza > P75, brecha <= P75), y Python usaba >= P75 y < P50.
+ * Ya no coinciden ni en contenido ni en cantidad de viñetas, así que la comparación
+ * posicional bloque por bloque perdería el paso y arrastraría todo lo que sigue.
+ *
+ * En vez de saltear la sección, se verifica contra la regla: cada lista tiene que
+ * contener exactamente las dimensiones que le corresponden, ni una más ni una menos.
+ * Los cortes se reescriben acá, como todo lo demás de este archivo, para que un
+ * cambio de umbral tenga que decidirse dos veces.
+ */
+const FORTALEZAS_DEL_PUNTO_5 = [
+  ['Consideración Individualizada', (r) => r.celid.percentil.ConsInd],
+  ['Liderazgo Considerado', (r) => r.camin.percentil.Cons],
+  ['Liderazgo Participativo', (r) => r.camin.percentil.Part],
+  ['Orientación a Metas', (r) => r.camin.percentil.Or],
+  ['Conductas de Relaciones', (r) => r.conlid.percentil.Rel],
+  ['Conductas Orientadas al Cambio', (r) => r.conlid.percentil.Camb],
+  ['Liderazgo Transformacional', (r) => r.celid.percentil.TransfTot],
+  ['Motivación Intrínseca', (r) => r.potenlid.percentil.Intr],
+];
+
+const AREAS_DEL_PUNTO_5 = [
+  ['Tendencia Laissez-Faire', (r) => nivelDe(r.celid.percentil.Laissez) === 'Alto'],
+  ['Liderazgo Directivo', (r) => esBrechaEsperada(r.camin.percentil.Dir)],
+  ['Recompensa Contingente', (r) => esBrechaEsperada(r.celid.percentil.RecCont)],
+  ['Carisma e Influencia Simbólica', (r) => esBrechaEsperada(r.celid.percentil.Carisma)],
+  ['Estimulación Intelectual', (r) => esBrechaEsperada(r.celid.percentil.EstimInt)],
+  ['Conductas de Tarea', (r) => esBrechaEsperada(r.conlid.percentil.Tar)],
+  ['Autorregulación Emocional', (r) => r.neo.nivel.N === 'Alto' || r.neo.nivel.N === 'Muy Alto'],
+];
+
+/** Los títulos de las viñetas que hay entre dos encabezados de la sección 5. */
+function vinetasEntre(bloques, desde, hasta) {
+  const texto = (b) => (b.tramos || []).map((t) => t.texto).join('');
+  const i = bloques.findIndex((b) => texto(b) === desde);
+  const j = bloques.findIndex((b, k) => k > i && texto(b) === hasta);
+  if (i < 0 || j < 0) return null;
+  return bloques.slice(i + 1, j)
+    .map(texto)
+    .filter((t) => t.indexOf('• ') === 0)
+    .map((t) => t.slice(2).split(/ \(|: /)[0]);
+}
+
+function revisarPunto5(obtenido, r) {
+  const problemas = [];
+
+  const fortalezas = vinetasEntre(obtenido, 'Principales Fortalezas', 'Principales Áreas de Desarrollo');
+  const areas = vinetasEntre(obtenido, 'Principales Áreas de Desarrollo', 'Objetivos de Desarrollo Sugeridos');
+  if (!fortalezas || !areas) return ['no se encontraron las listas del punto 5'];
+
+  const revisarLista = (titulo, emitidas, catalogo, corresponde) => {
+    catalogo.forEach(([nombre, dato]) => {
+      const toca = corresponde(dato(r));
+      const esta = emitidas.indexOf(nombre) >= 0;
+      if (toca && !esta) problemas.push(`${titulo}: falta ${nombre}`);
+      if (!toca && esta) problemas.push(`${titulo}: sobra ${nombre}`);
+    });
+  };
+
+  revisarLista('fortalezas', fortalezas, FORTALEZAS_DEL_PUNTO_5, (p) => p > 75);
+  revisarLista('áreas', areas, AREAS_DEL_PUNTO_5, (cumple) => cumple);
+
+  // Invariante de HU2: la frase de "sin brechas" y una lista de brechas no pueden
+  // convivir. Es literalmente lo que la regla de negocio prohíbe.
+  const sinBrechas = areas.some((a) => /El perfil no presenta brechas/.test(a));
+  const hayBrechas = AREAS_DEL_PUNTO_5.some(([, dato]) => dato(r));
+  if (sinBrechas && hayBrechas) {
+    problemas.push('dice que no hay brechas significativas y hay brechas');
+  }
+  return problemas;
+}
+
+/**
  * Los 14 ejes del radar en el orden de RADAR_ETIQUETAS, con el nombre largo que usa
  * la prosa. Reescritos acá por el mismo motivo que todo lo demás de este archivo.
  */
@@ -354,21 +434,34 @@ function revisarLineaDelMapa(texto, r, cual) {
  *   1. La sección 4 no usa los términos del punto 5. Es lo que mantiene la separación
  *      viva: sin esto, alcanza con que alguien "mejore la redacción" para que la
  *      contradicción vuelva.
- *   2. Ninguna dimensión aparece a la vez entre las más cercanas al ideal y entre las
- *      áreas de desarrollo del punto 5. Eso no debería pasar nunca —los ideales están
- *      entre P70 y P90, así que estar cerca implica percentil alto— y se midió en 0
- *      de 24.084 pares; queda verificado en cada corrida en vez de confiado.
+ *   2. Ninguna dimensión POR ENCIMA del corte de brecha aparece a la vez entre las
+ *      más cercanas al ideal y entre las áreas de desarrollo del punto 5.
+ *
+ * El punto 2 decía "ninguna dimensión", sin más, y se apoyaba en que los ideales
+ * están entre P70 y P90: estar cerca implicaba percentil alto, e implicaba no ser
+ * brecha. Esa cadena se cortó el 2026-07-27, cuando el PO llevó la brecha hasta P75
+ * inclusive. Ahora una dimensión en P75 con ideal P80 está a 5 puntos del ideal Y es
+ * brecha, y eso pasa en 15 de los 29 informes de referencia — el caso más fuerte es
+ * el Liderazgo Directivo de SM, en P75 con ideal P75: distancia 0, exactamente en el
+ * ideal, y listado como área de desarrollo.
+ *
+ * No es un error del código: es lo que el corte nuevo produce, y las dos secciones
+ * declaran criterios distintos (el mapa remite explícitamente al punto 5 para la
+ * clasificación). Pero es una lectura rara para quien recibe el informe, y está
+ * anotada en el plan para que el PO decida si quiere cambiar la redacción de la
+ * sección 4. Hasta entonces la invariante acepta el solapamiento sólo cuando el
+ * percentil está dentro de la banda de brecha, que es lo único que el corte explica.
  */
 const PARES_MAPA_SINTESIS = [
-  ['Laissez-Faire', 'Tendencia Laissez-Faire'],
-  ['Liderazgo Directivo', 'Liderazgo Directivo'],
-  ['Recompensa Contingente', 'Recompensa Contingente'],
-  ['Carisma', 'Carisma e Influencia Simbólica'],
-  ['Estimulación Intelectual', 'Estimulación Intelectual'],
-  ['Conductas de Tarea', 'Conductas de Tarea'],
+  ['Laissez-Faire', 'Tendencia Laissez-Faire', (r) => r.celid.percentil.Laissez],
+  ['Liderazgo Directivo', 'Liderazgo Directivo', (r) => r.camin.percentil.Dir],
+  ['Recompensa Contingente', 'Recompensa Contingente', (r) => r.celid.percentil.RecCont],
+  ['Carisma', 'Carisma e Influencia Simbólica', (r) => r.celid.percentil.Carisma],
+  ['Estimulación Intelectual', 'Estimulación Intelectual', (r) => r.celid.percentil.EstimInt],
+  ['Conductas de Tarea', 'Conductas de Tarea', (r) => r.conlid.percentil.Tar],
 ];
 
-function revisarMapaContraSintesis(bloques) {
+function revisarMapaContraSintesis(bloques, r) {
   const texto = (b) => (b.tramos || []).map((t) => t.texto).join('');
   const problemas = [];
 
@@ -393,8 +486,12 @@ function revisarMapaContraSintesis(bloques) {
     PARES_MAPA_SINTESIS
       .filter(([enMapa, enSintesis]) => cercanas.indexOf(enMapa + ' (P') >= 0
         && areas.indexOf(enSintesis + ' (') >= 0)
-      .forEach(([enMapa]) => problemas.push(
-        `${enMapa} está entre las más cercanas al ideal y a la vez es área de desarrollo en el punto 5`));
+      // Dentro de la banda de brecha el solapamiento lo explica el corte del PO.
+      // Por encima no lo explica nada, y ahí sí es una contradicción.
+      .filter(([, , percentilDe]) => !esBrechaEsperada(percentilDe(r)))
+      .forEach(([enMapa, , percentilDe]) => problemas.push(
+        `${enMapa} (P${percentilDe(r)}) está entre las más cercanas al ideal y a la vez es`
+        + ' área de desarrollo en el punto 5, y su percentil no lo explica'));
   }
   return problemas;
 }
@@ -495,11 +592,22 @@ function main() {
     const obtenido = normalizar(body.bloques);
     const esperado = informe.bloques;
 
-    const diferencias = revisarMapaContraSintesis(obtenido);
-    if (esperado.length !== obtenido.length) {
+    const diferencias = revisarMapaContraSintesis(obtenido, resultados);
+
+    // El punto 5 sale de los cortes nuevos y ya no coincide con Python ni en la
+    // cantidad de viñetas. Se verifica por regla y se corta ahí la comparación
+    // posicional, que a partir de ese punto compararía bloques desalineados.
+    const tituloDe = (b) => ((b && b.tramos) || []).map((t) => t.texto).join('');
+    const inicio5 = esperado.findIndex((b) => tituloDe(b).indexOf('5. Síntesis') === 0);
+    const hasta = inicio5 >= 0 ? inicio5 : Math.min(esperado.length, obtenido.length);
+    if (inicio5 >= 0) {
+      revisarPunto5(obtenido.slice(inicio5), resultados)
+        .forEach((p) => diferencias.push(`punto 5 (cortes del PO, no comparable con Python): ${p}`));
+    } else if (esperado.length !== obtenido.length) {
       diferencias.push(`cantidad de bloques: python=${esperado.length} js=${obtenido.length}`);
     }
-    for (let i = 0; i < Math.min(esperado.length, obtenido.length); i++) {
+
+    for (let i = 0; i < Math.min(hasta, obtenido.length); i++) {
       const antes = diferencias.length;
       // El radar ahora ocupa el ancho útil de la página, así que sus dimensiones
       // ya no coinciden con el PNG de Python a propósito: se verifica que haya

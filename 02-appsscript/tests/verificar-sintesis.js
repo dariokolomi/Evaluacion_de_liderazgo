@@ -96,7 +96,7 @@ function respuestaSimulada(codigo, contenido) {
  *  Sin un solo número: el PO pidió que la devolución hable de niveles. */
 function sintesisValida() {
   return {
-    resumenGeneral: 'Perfil con eje en las personas: nivel alto de consideración individualizada, con una tendencia alta a la no-intervención.',
+    resumenGeneral: 'Perfil con eje en las personas: nivel alto de consideración individualizada, con el liderazgo directivo en nivel medio.',
     fortalezas: [
       { titulo: 'Orientación a las personas', texto: 'Nivel alto de consideración individualizada.' },
       { titulo: 'Conducción participativa', texto: 'Nivel alto de liderazgo participativo.' },
@@ -105,11 +105,11 @@ function sintesisValida() {
     // `dimension` declara en qué dato se apoya la brecha y no se imprime.
     areasDesarrollo: [
       { dimension: 'Recompensa Contingente', titulo: 'Reconocimiento sistemático', texto: 'La recompensa contingente queda en nivel medio.' },
-      { dimension: 'Laissez-Faire', titulo: 'Intervención ante desvíos', texto: 'Tendencia alta a la no-intervención.' },
+      { dimension: 'Liderazgo Directivo', titulo: 'Dirección explícita', texto: 'El liderazgo directivo queda en nivel medio.' },
       { dimension: 'Conductas Orientadas a la Tarea', titulo: 'Seguimiento operativo', texto: 'Las conductas de tarea quedan en nivel medio.' },
     ],
     inferencias: [
-      { titulo: 'Presencia afectiva y ausencia operativa', texto: 'Consideración en nivel alto conviviendo con no-intervención alta.' },
+      { titulo: 'Presencia afectiva y dirección difusa', texto: 'Consideración en nivel alto conviviendo con un liderazgo directivo en nivel medio.' },
       { titulo: 'Apertura sin conductas de cambio', texto: 'Apertura en nivel promedio frente a conductas de cambio en nivel alto.' },
     ],
     recomendaciones: [
@@ -285,7 +285,7 @@ r = conCambio((s) => {
 ok(r.ok, 'un número que no es un puntaje no se rechaza', r.motivo);
 
 // ── Validación: jerga interna ──
-r = conCambio((s) => { s.areasDesarrollo[1].texto = 'Laissez-Faire (P75, escala invertida).'; });
+r = conCambio((s) => { s.areasDesarrollo[1].texto = 'El directivo (P50, escala invertida).'; });
 ok(!r.ok && /jerga/.test(r.motivo), 'se rechaza la jerga "escala invertida" en el texto', r.motivo);
 
 r = conCambio((s) => { s.fortalezas[0].texto = 'Según el CELID-A, P99 en consideración.'; });
@@ -349,11 +349,11 @@ ok(gs.puntajesTCitados('con T=64 y T = 50').join(',') === '64,50', 'se detectan 
   [true, 'la dimensión antes del nivel no se revisa',
     'La Estimulación Intelectual se encuentra en nivel medio.'],
   [true, 'una inferencia larga y correcta',
-    'La combinación de niveles altos en Consideración Individualizada, Liderazgo Considerado y Conductas Orientadas a las Relaciones, junto con un nivel alto en Laissez-Faire, sugiere presencia afectiva.'],
+    'La combinación de niveles altos en Consideración Individualizada, Liderazgo Considerado y Conductas Orientadas a las Relaciones, junto con un nivel alto en Liderazgo Participativo, sugiere presencia afectiva.'],
   // Salidas reales del modelo que el validador rechazaba de más: el alcance de un
   // nivel se comía la dimensión de la cláusula siguiente, que tiene su propio nivel.
   [true, 'dos cláusulas separadas por "su"',
-    'Aunque Fran muestra un nivel alto en Inspiración / Motivación Inspiracional, su Carisma / Influencia Idealizada se encuentra en nivel medio.'],
+    'Aunque Fran muestra un nivel alto en Consideración Individualizada, su Carisma / Influencia Idealizada se encuentra en nivel medio.'],
   [true, 'dos cláusulas separadas por "pero"',
     'Con un nivel alto en Extraversión y Conductas Orientadas a las Relaciones, pero un nivel medio en Conductas Orientadas a la Tarea y Liderazgo Directivo, Fran demuestra energía.'],
   [false, 'un error metido en el medio de una lista correcta',
@@ -404,7 +404,15 @@ ok(!r.ok, 'y también cuando el modelo mueve el error a otra dimensión alta', r
 r = conCambio((s) => { s.areasDesarrollo[0].dimension = 'Fortaleza inventada'; });
 ok(!r.ok, 'se rechaza una dimensión que no existe en el perfil', r.motivo);
 
-r = conCambio((s) => { s.areasDesarrollo[0].dimension = 'Laissez-Faire'; });
+// El Laissez-Faire de este perfil quedó en nivel medio cuando el corte de Alto pasó
+// a > P75, así que la propiedad se prueba sobre una copia con esa dimensión en alto:
+// lo que importa acá no es cuánto puntúa este perfil sino que una escala invertida
+// en nivel alto pueda sostener una brecha.
+const perfilLaissezAlto = JSON.parse(JSON.stringify(perfil));
+perfilLaissezAlto.dimensiones.find((d) => d.dimension === 'Laissez-Faire').nivel = 'Alto';
+const conLaissez = sintesisValida();
+conLaissez.areasDesarrollo[0].dimension = 'Laissez-Faire';
+r = gs.validarSintesis(conLaissez, perfilLaissezAlto);
 ok(r.ok, 'una dimensión invertida en nivel alto SÍ puede sostener una brecha', r.motivo);
 
 r = conCambio((s) => { delete s.areasDesarrollo[1].dimension; });
@@ -555,7 +563,7 @@ const renderLlm = textoDe(conLlm);
   'Pendiente de Definir'].forEach((titulo) => {
   ok(renderLlm.indexOf(titulo) >= 0, `el informe con LLM incluye el bloque "${titulo}"`);
 });
-ok(renderLlm.indexOf('Presencia afectiva y ausencia operativa') >= 0,
+ok(renderLlm.indexOf('Presencia afectiva y dirección difusa') >= 0,
   'las inferencias del modelo llegan al documento');
 ok(renderLlm.indexOf('Principales Fortalezas') < 0,
   'con síntesis del LLM no se emite además el texto determinista');

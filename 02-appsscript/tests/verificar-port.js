@@ -56,7 +56,7 @@ function comparar(ruta, esperado, obtenido, diferencias) {
 function nivelPorPercentilEsperado(percentiles) {
   const niveles = {};
   for (const [clave, p] of Object.entries(percentiles)) {
-    niveles[clave] = p >= 75 ? 'Alto' : p > 25 ? 'Medio' : 'Bajo';
+    niveles[clave] = p > 75 ? 'Alto' : p > 25 ? 'Medio' : 'Bajo';
   }
   return niveles;
 }

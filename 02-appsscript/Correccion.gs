@@ -78,21 +78,32 @@ function percentil(valor, tabla) {
 }
 
 /**
- * Alto desde P75; Bajo hasta P25 inclusive; Medio, la banda del medio.
+ * Alto por encima de P75; Bajo hasta P25 inclusive; Medio, la banda del medio.
  *
- * El corte entre Medio y Bajo lo fijó el PO el 2026-07-27: "medio = >P25 y
- * bajo <= P25". Antes P25 se rotulaba Medio, y desde que la síntesis del punto 5
- * dice el nivel en vez del percentil, un P25 informado como "Medio" es engañoso:
- * el rótulo pasó a ser lo único que el lector recibe.
+ * Los dos cortes los fijó el PO el 2026-07-27, en dos respuestas:
+ *   - "medio = > P25 y bajo <= P25"
+ *   - "> P75 fortaleza consolidada", "> P25 y <= P75 es Brecha"
+ *
+ * Las dos describen las mismas bandas: arrancan las dos en > P25. Por eso el
+ * nivel quedó alineado con el punto 5 y el corte de Alto pasó de >= 75 a > 75:
+ *
+ *     Bajo   = Alto? no        <= P25
+ *     Medio  ≡ Brecha          > P25 y <= P75
+ *     Alto   ≡ Fortaleza       > P75
+ *
+ * Sin alinearlo, una dimensión en P75 salía rotulada "Alto" en la tabla de la
+ * sección 1 y listada como área de desarrollo en el punto 5, en el mismo informe
+ * —le pasaba al Liderazgo Directivo de SM—. Es exactamente la contradicción entre
+ * secciones que describe HU2, así que no se podía dejar.
  *
  * Esta función es la única fuente del rótulo —las tablas de las secciones 1 a 4,
  * el reparto de subescalas del 2.2 y la síntesis leen todas de acá—, así que
  * mover el corte no puede dejar dos secciones diciendo cosas distintas del mismo
- * valor. Los cortes de fortaleza (>= P75) y brecha (< P50) del punto 5 son otro
- * vocabulario, viven en `Perfil.gs` y siguen esperando la pregunta 3 al PO.
+ * valor. Los cortes del punto 5 viven en `Perfil.gs` (`esFortalezaConsolidada`,
+ * `esBrecha`) y ahora coinciden con éstos.
  */
 function nivelPorPercentil(p) {
-  if (p >= 75) return 'Alto';
+  if (p > 75) return 'Alto';
   if (p > 25) return 'Medio';
   return 'Bajo';
 }

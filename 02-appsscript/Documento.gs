@@ -495,14 +495,14 @@ function vinetasConTitulo(body, items) {
 function sintesisDeterminista(body, neo, cel, cam, pot, con) {
   parrafo(body, 'Principales Fortalezas', { negrita: true, tamano: 11 });
   var fortalezas = [];
-  if (cel.ConsInd >= 75) fortalezas.push('Consideración Individualizada (P' + cel.ConsInd + '): atiende activamente el desarrollo y las necesidades de cada colaborador/a, construyendo vínculos de confianza sólidos.');
-  if (cam.Cons >= 75) fortalezas.push('Liderazgo Considerado (P' + cam.Cons + '): genera un ambiente de bienestar, contención y apoyo que favorece la retención y el compromiso del equipo.');
-  if (cam.Part >= 75) fortalezas.push('Liderazgo Participativo (P' + cam.Part + '): involucra y consulta activamente al equipo en las decisiones, generando sentido de pertenencia y apropiación de los objetivos.');
-  if (cam.Or >= 75) fortalezas.push('Orientación a Metas (P' + cam.Or + '): establece objetivos exigentes y alienta el rendimiento superior combinando desafío con apoyo.');
-  if (con.Rel >= 75) fortalezas.push('Conductas de Relaciones (P' + con.Rel + '): reconocimiento de logros, apoyo cercano e información fluida al equipo como herramientas cotidianas de gestión.');
-  if (con.Camb >= 75) fortalezas.push('Conductas Orientadas al Cambio (P' + con.Camb + '): genera alianzas, promueve nuevas estrategias y forma equipos orientados a la transformación.');
-  if (cel.TransfTot >= 75) fortalezas.push('Liderazgo Transformacional (P' + cel.TransfTot + '): inspira y motiva al equipo hacia metas compartidas, trascendiendo el intercambio puramente transaccional.');
-  if (pot.Intr >= 75) fortalezas.push('Motivación Intrínseca (P' + pot.Intr + '): ejerce el liderazgo por convicción y disfrute genuino del rol, lo que se traduce en consistencia y autenticidad.');
+  if (esFortalezaConsolidada(cel.ConsInd)) fortalezas.push('Consideración Individualizada (P' + cel.ConsInd + '): atiende activamente el desarrollo y las necesidades de cada colaborador/a, construyendo vínculos de confianza sólidos.');
+  if (esFortalezaConsolidada(cam.Cons)) fortalezas.push('Liderazgo Considerado (P' + cam.Cons + '): genera un ambiente de bienestar, contención y apoyo que favorece la retención y el compromiso del equipo.');
+  if (esFortalezaConsolidada(cam.Part)) fortalezas.push('Liderazgo Participativo (P' + cam.Part + '): involucra y consulta activamente al equipo en las decisiones, generando sentido de pertenencia y apropiación de los objetivos.');
+  if (esFortalezaConsolidada(cam.Or)) fortalezas.push('Orientación a Metas (P' + cam.Or + '): establece objetivos exigentes y alienta el rendimiento superior combinando desafío con apoyo.');
+  if (esFortalezaConsolidada(con.Rel)) fortalezas.push('Conductas de Relaciones (P' + con.Rel + '): reconocimiento de logros, apoyo cercano e información fluida al equipo como herramientas cotidianas de gestión.');
+  if (esFortalezaConsolidada(con.Camb)) fortalezas.push('Conductas Orientadas al Cambio (P' + con.Camb + '): genera alianzas, promueve nuevas estrategias y forma equipos orientados a la transformación.');
+  if (esFortalezaConsolidada(cel.TransfTot)) fortalezas.push('Liderazgo Transformacional (P' + cel.TransfTot + '): inspira y motiva al equipo hacia metas compartidas, trascendiendo el intercambio puramente transaccional.');
+  if (esFortalezaConsolidada(pot.Intr)) fortalezas.push('Motivación Intrínseca (P' + pot.Intr + '): ejerce el liderazgo por convicción y disfrute genuino del rol, lo que se traduce en consistencia y autenticidad.');
   if (neo.nivel.E === 'Alto' || neo.nivel.E === 'Muy Alto') fortalezas.push('Extraversión (' + neo.nivel.E + ', T=' + neo.t.E + '): sociabilidad y energía natural para construir vínculos de confianza y mantener al equipo conectado.');
   if (neo.nivel.N === 'Bajo' || neo.nivel.N === 'Muy Bajo') fortalezas.push('Estabilidad Emocional (' + neo.nivel.N + ', T=' + neo.t.N + '): manejo sólido del estrés y la presión del rol, recurso fundamental para el liderazgo sostenido.');
   if (!fortalezas.length) fortalezas.push('Ver análisis detallado en secciones anteriores.');
