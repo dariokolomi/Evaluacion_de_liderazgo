@@ -28,7 +28,7 @@ const MAX_DIFERENCIAS = 12;
  */
 function nivelDe(p) {
   if (p >= 75) return 'Alto';
-  if (p >= 25) return 'Medio';
+  if (p > 25) return 'Medio';
   return 'Bajo';
 }
 
@@ -176,6 +176,22 @@ const DIVERGENCIAS = [
           : 'reporta una tensión que este perfil no tiene');
     },
   },
+  {
+    // Va última: las entradas con `desde` tienen prioridad y esta barre el resto.
+    patron: /^.*? : (Alto|Medio|Bajo) \(P\d+\)\./,
+    porque: 'el corte del nivel cambió el 2026-07-27: bajo es hasta P25 inclusive',
+    revisar: (texto, perfil, r, esperado) => {
+      const m = /^(.*?) : (Alto|Medio|Bajo) \(P(\d+)\)\./.exec(texto);
+      if (!m) return 'dejó de declarar el nivel y el percentil de la dimensión';
+      const nivel = nivelDe(Number(m[3]));
+      if (m[2] !== nivel) return `${m[1]} está en P${m[3]} y el párrafo dice ${m[2]}`;
+      // Fuera el nivel, el párrafo tiene que seguir siendo palabra por palabra el de
+      // Python: lo único que este cambio autoriza a mover es el rótulo.
+      const pelar = (t) => t.replace(/ : (Alto|Medio|Bajo) \(/, ' : (');
+      return pelar(texto) === pelar(esperado)
+        || `además del nivel cambió el texto: "${texto}"`;
+    },
+  },
 ];
 
 /**
@@ -238,6 +254,52 @@ const DIVERGENCIA_TABLA = {
     if (/Amabilidad/.test(fundamentos) && !amabilidadAlta) {
       problemas.push(`invoca la Amabilidad como obstáculo con nivel ${r.neo.nivel.A} (T=${r.neo.t.A})`);
     }
+    return problemas.length ? problemas.join('; ') : true;
+  },
+};
+
+/**
+ * Las cuatro tablas de percentiles de la sección 1.
+ *
+ * El PO movió el corte el 2026-07-27: bajo es hasta P25 inclusive. En estos baremos
+ * P25 no es un borde sino uno de los nueve valores que la tabla puede devolver, así
+ * que la columna Nivel deja de coincidir con Python en casi todos los informes.
+ *
+ * La tabla se sigue comparando celda por celda; lo único que sale de la comparación
+ * literal es esa columna, que pasa a verificarse contra el percentil de su propia
+ * fila —y contra el color que le toca, porque el sombreado también lo decide el
+ * nivel—. La tabla del NEO no entra acá: su nivel sale del puntaje T y no se tocó.
+ */
+const DIVERGENCIA_NIVEL = {
+  coincide: (bloque) => bloque && bloque.tipo === 'tabla' && bloque.filas[0]
+    && bloque.filas[0].length === 4
+    && bloque.filas[0][2].texto === 'Percentil' && bloque.filas[0][3].texto === 'Nivel',
+  porque: 'el corte del nivel cambió: bajo es hasta P25 inclusive',
+  revisar: (tabla, esperado) => {
+    const problemas = [];
+    // En CELID la columna del nivel no se pinta por nivel: las filas de total y la
+    // de Laissez-Faire van en azul y el resto queda sin fondo.
+    const esCelid = tabla.filas[0][1].texto === 'Media';
+    tabla.filas.slice(1).forEach((fila) => {
+      const p = Number(fila[2].texto.replace(/[^0-9]/g, ''));
+      const nivel = nivelDe(p);
+      if (fila[3].texto !== nivel) {
+        problemas.push(`${fila[0].texto} está en P${p} y la tabla lo llama "${fila[3].texto}"`);
+      }
+      const destacada = /Total|LAISSEZ/.test(fila[0].texto);
+      const fondo = destacada ? '#DCE6F1'
+        : esCelid ? null
+          : nivel === 'Alto' ? '#E2EFDA'
+            : nivel === 'Bajo' ? '#FCE4D6' : null;
+      if ((fila[3].fondo || null) !== fondo) {
+        problemas.push(`${fila[0].texto} es ${nivel} y se pinta ${fila[3].fondo}, no ${fondo}`);
+      }
+    });
+    const sinNivel = (t) => ({
+      tipo: t.tipo,
+      filas: t.filas.map((f) => f.map((c, col) => (col === 3 ? null : c))),
+    });
+    comparar('resto de la tabla', sinNivel(esperado), sinNivel(tabla), problemas);
     return problemas.length ? problemas.join('; ') : true;
   },
 };
@@ -340,7 +402,9 @@ function revisarMapaContraSintesis(bloques) {
 function divergenciaDe(bloque) {
   if (!bloque || bloque.tipo !== 'parrafo' || !bloque.tramos.length) return null;
   const texto = bloque.tramos.map((t) => t.texto).join('');
-  return DIVERGENCIAS.find((d) => texto.indexOf(d.desde) === 0) || null;
+  return DIVERGENCIAS.find((d) => (d.desde
+    ? texto.indexOf(d.desde) === 0
+    : d.patron.test(texto))) || null;
 }
 
 function cargarGs() {
@@ -444,9 +508,20 @@ function main() {
       if (divergencia) {
         const obtenidoTexto = (obtenido[i] && obtenido[i].tramos || [])
           .map((t) => t.texto).join('');
-        const veredicto = divergencia.revisar(obtenidoTexto, perfilDelCaso, resultados);
+        const esperadoTexto = (esperado[i].tramos || []).map((t) => t.texto).join('');
+        const veredicto = divergencia.revisar(
+          obtenidoTexto, perfilDelCaso, resultados, esperadoTexto);
         if (veredicto !== true) {
           diferencias.push(`bloque[${i}] (${divergencia.porque}): ${veredicto}`);
+        }
+        continue;
+      }
+      if (DIVERGENCIA_NIVEL.coincide(esperado[i])) {
+        const veredicto = DIVERGENCIA_NIVEL.coincide(obtenido[i])
+          ? DIVERGENCIA_NIVEL.revisar(obtenido[i], esperado[i])
+          : 'se esperaba una tabla de percentiles';
+        if (veredicto !== true) {
+          diferencias.push(`bloque[${i}] (${DIVERGENCIA_NIVEL.porque}): ${veredicto}`);
         }
         continue;
       }
