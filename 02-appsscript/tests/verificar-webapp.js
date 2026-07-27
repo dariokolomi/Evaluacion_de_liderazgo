@@ -34,13 +34,37 @@ function hojaFalsa(filas) {
       getValues: () => datos.slice(fila - 1, fila - 1 + (cantidadFilas || 1))
         .map((f) => f.slice(columna - 1, columna - 1 + (cantidadColumnas || 1))),
       setValue: (valor) => { datos[fila - 1][columna - 1] = valor; },
+      // La calificación escribe sus dos celdas de una sola vez, para que no exista
+      // el estado intermedio con el puntaje guardado y el comentario todavía no.
+      setValues: (valores) => {
+        valores.forEach((f, i) => {
+          f.forEach((valor, j) => { datos[fila - 1 + i][columna - 1 + j] = valor; });
+        });
+      },
     }),
+  };
+}
+
+/** Lock simulado que anota de qué tipo es y si se tomó y se soltó. */
+function bloqueoFalso(registro, tipo, ocupado) {
+  registro.lock.tipo = tipo;
+  return {
+    waitLock: () => {
+      if (ocupado) throw new Error('Could not obtain lock after 10000ms.');
+      registro.lock.tomado++;
+    },
+    releaseLock: () => { registro.lock.suelto++; },
   };
 }
 
 function crearEntorno(escenario) {
   const e = escenario || {};
-  const registro = { plantilla: null, titulo: null, htmlCrudo: null, grupo: null, cache: {} };
+  const registro = {
+    plantilla: null, titulo: null, htmlCrudo: null, grupo: null, cache: {},
+    // Qué lock pidió la calificación y si lo soltó. El tipo importa: el de usuario
+    // no serializa a dos personas distintas, que es lo único que hay que evitar.
+    lock: { tipo: null, tomado: 0, suelto: 0 },
+  };
 
   const hoja = hojaFalsa(e.filas || [ENCABEZADO]);
   const archivos = e.archivos || [
@@ -103,6 +127,12 @@ function crearEntorno(escenario) {
           registro.plantillaObj = plantilla;
           return plantilla;
         },
+      },
+      // Lock simulado. `lockOcupado` reproduce el caso de dos personas calificando
+      // a la vez: waitLock lanza y la calificación no tiene que escribir nada.
+      LockService: {
+        getScriptLock: () => bloqueoFalso(registro, 'script', e.lockOcupado),
+        getUserLock: () => bloqueoFalso(registro, 'usuario', e.lockOcupado),
       },
       // Cache simulado, para el progreso por etapas (Progreso.gs).
       CacheService: {
@@ -223,6 +253,50 @@ function main() {
   revisar('el comentario se recorta a 500 caracteres', conCorridas.hoja.datos[1][7].length === 500);
   revisar('calificarInforme exige acceso por su cuenta',
     !!intentar(() => gsSinAcceso.calificarInforme(2, 4, '')).error);
+
+  // ── El lock de la calificación ──
+  // Registrar una corrida es un append y el Sheet lo serializa solo. Calificar es
+  // leer el tamaño de la hoja, validar contra él y después escribir: eso no es
+  // atómico, y con dos personas usando la app dejó de ser un caso imposible.
+  revisar('la calificación toma el lock DE SCRIPT',
+    conCorridas.registro.lock.tipo === 'script',
+    `pidió el lock de ${conCorridas.registro.lock.tipo}: el de usuario no serializa`
+    + ' a dos personas distintas, que es lo único que hay que evitar');
+  revisar('y lo suelta al terminar',
+    conCorridas.registro.lock.tomado > 0
+    && conCorridas.registro.lock.suelto === conCorridas.registro.lock.tomado,
+    JSON.stringify(conCorridas.registro.lock));
+
+  // Un lock que queda tomado por un error de validación bloquea a todos los demás
+  // hasta que expire, así que el release tiene que estar en un finally.
+  const conFilaMala = crearEntorno({ filas: [ENCABEZADO, [new Date(), 'A', 'p', 'u', USUARIO, 1, '', '']] });
+  const gsFilaMala = cargarGs(conFilaMala.globales);
+  intentar(() => gsFilaMala.calificarInforme(99, 4, ''));
+  revisar('el lock se suelta también cuando la fila es inválida',
+    conFilaMala.registro.lock.tomado === 1 && conFilaMala.registro.lock.suelto === 1,
+    JSON.stringify(conFilaMala.registro.lock));
+
+  // Un puntaje inválido se rechaza sin llegar a pedir el lock: no tiene sentido
+  // hacer esperar a nadie por un dato que ya sabemos que está mal.
+  const conPuntajeMalo = crearEntorno({ filas: [ENCABEZADO, [new Date(), 'A', 'p', 'u', USUARIO, 1, '', '']] });
+  const gsPuntajeMalo = cargarGs(conPuntajeMalo.globales);
+  intentar(() => gsPuntajeMalo.calificarInforme(2, 9, ''));
+  revisar('un puntaje inválido se rechaza antes de pedir el lock',
+    conPuntajeMalo.registro.lock.tomado === 0, JSON.stringify(conPuntajeMalo.registro.lock));
+
+  // Si otra persona lo está usando, se avisa en castellano y no se escribe nada.
+  const conLockOcupado = crearEntorno({
+    lockOcupado: true,
+    filas: [ENCABEZADO, [new Date(), 'A', 'p', 'u', USUARIO, 1, '', '']],
+  });
+  const gsLockOcupado = cargarGs(conLockOcupado.globales);
+  const ocupado = intentar(() => gsLockOcupado.calificarInforme(2, 4, 'no debería entrar'));
+  revisar('si el lock está ocupado, se avisa con un mensaje entendible',
+    !!ocupado.error && /Otra persona está calificando/.test(ocupado.error.message),
+    ocupado.error && ocupado.error.message);
+  revisar('y no se escribe nada',
+    conLockOcupado.hoja.datos[1][6] === '' && conLockOcupado.hoja.datos[1][7] === '',
+    JSON.stringify(conLockOcupado.hoja.datos[1]));
 
   // ── Progreso por etapas ──────────────────────────────────────────
   const prog = crearEntorno();

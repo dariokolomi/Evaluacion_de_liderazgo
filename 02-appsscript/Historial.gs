@@ -3,7 +3,11 @@
  *
  * Reemplaza a .runs_history.json, que además de no ser una base de datos no
  * tenía lock de escritura: dos corridas simultáneas se pisaban. Un Sheet
- * serializa los appends por su cuenta.
+ * serializa los appends por su cuenta, así que registrar una corrida no necesita
+ * lock.
+ *
+ * Calificar sí: no es un append sino un leer-validar-escribir sobre una fila que
+ * ya existe, y eso el Sheet no lo serializa. Ver `calificarCorrida`.
  *
  * Las columnas siguen las del Excel de calidad que arma hoy la app
  * (app.py:42-50), menos "Modelo": ya no hay archivo modelo que elegir.
@@ -80,21 +84,64 @@ function leerCorridas(historialId, limite) {
 }
 
 /**
+ * Cuánto se espera por el lock antes de darse por vencido.
+ *
+ * La escritura en sí es de milisegundos; diez segundos alcanzan para varias
+ * esperas encoladas y siguen siendo un tiempo que un botón puede sostener sin
+ * que parezca colgado.
+ */
+var ESPERA_LOCK_MS = 10000;
+
+/**
  * Guarda la calificación de una corrida.
+ *
  * Valida la fila contra el tamaño real de la hoja: el número viene del
  * navegador, y con un número cualquiera se escribiría sobre el encabezado o
  * fuera del rango.
+ *
+ * POR QUÉ HAY UN LOCK ACÁ Y NO EN `registrarCorrida`: registrar es un append, que
+ * el Sheet serializa solo. Calificar es leer el tamaño de la hoja, validar contra
+ * él y recién después escribir. Ese trío no es atómico, así que dos personas
+ * calificando la misma corrida a la vez se pisan y gana la última, sin aviso. Con
+ * un solo usuario era imposible; con el PO adentro pasa a ser un caso real.
  */
 function calificarCorrida(historialId, fila, calificacion, comentario) {
-  var hoja = hojaDeHistorial(historialId);
-  var numero = Number(fila);
-  if (!(numero >= 2 && numero <= hoja.getLastRow())) {
-    throw new Error('La corrida indicada no existe en el historial.');
-  }
+  // El puntaje no toca la hoja: se valida antes de pedir el lock, para no hacer
+  // esperar a nadie por un dato que ya sabemos que está mal.
   var puntaje = Number(calificacion);
   if (!(puntaje >= 1 && puntaje <= 5)) {
     throw new Error('La calificación tiene que ser un número del 1 al 5.');
   }
-  hoja.getRange(numero, COL_CALIFICACION).setValue(puntaje);
-  hoja.getRange(numero, COL_COMENTARIO).setValue(String(comentario || '').slice(0, 500));
+
+  // getScriptLock y no getUserLock: lo que hay que serializar son dos PERSONAS
+  // escribiendo a la vez. El lock de usuario serializa a alguien consigo mismo,
+  // que es justo el caso que no importa.
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(ESPERA_LOCK_MS);
+  } catch (e) {
+    // El error de Apps Script no le dice nada a quien está usando la app.
+    throw new Error('Otra persona está calificando en este momento. Probá de nuevo en unos segundos.');
+  }
+
+  try {
+    // La validación de la fila lee la hoja, así que va adentro del lock: es la
+    // primera mitad del leer-validar-escribir. Afuera validaría contra un tamaño
+    // que puede haber cambiado para cuando se escriba.
+    var hoja = hojaDeHistorial(historialId);
+    var numero = Number(fila);
+    if (!(numero >= 2 && numero <= hoja.getLastRow())) {
+      throw new Error('La corrida indicada no existe en el historial.');
+    }
+    // Una sola escritura en vez de dos: las columnas son contiguas, así que es una
+    // llamada a la API en lugar de dos y no existe el estado intermedio en el que
+    // quedó guardado el puntaje pero todavía no el comentario.
+    hoja.getRange(numero, COL_CALIFICACION, 1, 2)
+      .setValues([[puntaje, String(comentario || '').slice(0, 500)]]);
+  } finally {
+    // En el finally para que el lock se suelte también cuando la fila es inválida:
+    // un lock que queda tomado por un error de validación bloquea a todos los demás
+    // hasta que expire.
+    lock.releaseLock();
+  }
 }
