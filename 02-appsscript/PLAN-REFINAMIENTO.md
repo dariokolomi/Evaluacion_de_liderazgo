@@ -256,9 +256,41 @@ aparecieron al cruzar el refinamiento con el código.
    percentil 50 exacto. Es más simétrico que antes —P25 abajo espeja a P75 arriba—
    pero angosta la banda del medio a un solo valor.
 
-   Sigue sin responder el corte de arriba (`>= 75` vs. `> 75`) y los umbrales del
-   punto 5, que son otro vocabulario: fortaleza `>= P75` y brecha `< P50` en
-   `Perfil.gs:363-370`.
+   **El resto, respondido el 2026-07-27:** *"> P75 fortaleza consolidada"*, *"> P25 y
+   <= P75 es Brecha"*. Con eso las dos escalas del informe quedaron alineadas, porque
+   las dos respuestas del PO arrancan en el mismo lugar (`> P25`):
+
+   | Banda | Nivel (tablas 1-4) | Punto 5 |
+   |---|---|---|
+   | `> P75` | Alto | Fortaleza Consolidada |
+   | `> P25` y `<= P75` | Medio | Brecha |
+   | `<= P25` | Bajo | Brecha (ver abajo) |
+
+   Eso obligó a mover el corte de Alto de `>= 75` a `> 75`. Sin moverlo, una dimensión
+   en P75 salía rotulada "Alto" en la tabla de la sección 1 y listada como área de
+   desarrollo en el punto 5, en el mismo informe — le pasaba al Liderazgo Directivo de
+   Quico. Es exactamente la contradicción entre secciones que describe HU2.
+
+   **Tres cosas que la respuesta no cubre y quedaron resueltas por criterio,
+   pendientes de confirmación:**
+
+   1. **Debajo de P25.** La respuesta nombra "Brecha" a la banda `(P25, P75]` y deja
+      sin nombre lo que está más abajo. Se cuenta como brecha igual: una dimensión en
+      P10 no puede ser menos brecha que una en P75, y dejarla afuera la borraría de
+      las áreas de desarrollo. Si el PO quiere un rótulo aparte —"Brecha alta",
+      "Riesgo"— es agregar un nombre, no cambiar quién entra.
+   2. **La escala invertida.** El Laissez-Faire va al revés y la respuesta no lo
+      menciona. Su brecha pasó a definirse por el nivel ("Alto en Laissez-Faire",
+      o sea `> P75`), que es como ya la definía `Sintesis.gs`. Antes `Perfil.gs` usaba
+      `>= 75` y las dos discrepaban justo en P75.
+   3. **El solapamiento con la sección 4.** Con la brecha hasta P75, una dimensión
+      puede estar cerca de su ideal en el radar y ser área de desarrollo en el punto
+      5. Pasa en 15 de los 29 informes de referencia; el caso más fuerte es el
+      Liderazgo Directivo de Quico, en **P75 con ideal P75 —distancia 0, exactamente en
+      el ideal— y listado como área de desarrollo**. No es un error del código: las
+      dos secciones declaran criterios distintos y el mapa remite al punto 5 para la
+      clasificación. Pero es una lectura rara para quien recibe el informe, y la
+      decisión de cambiar la redacción de la sección 4 es del PO.
 4. **Reglas de cruce diagnóstico** además del ejemplo. Y la aclaración del ejemplo:
    ¿"Liderazgo Considerado" es *Consideración Individualizada* de CELID-A o *Liderazgo
    Considerado (Apoyo)* de CAMIN-A? Son escalas distintas de instrumentos distintos.

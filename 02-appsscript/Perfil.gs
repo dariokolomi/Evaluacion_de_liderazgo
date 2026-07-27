@@ -114,6 +114,42 @@ function clasificarPerfil(resultados) {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Los cortes del punto 5 — Fortaleza Consolidada y Brecha
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Umbrales del punto 5, respondidos por el PO el 2026-07-27:
+ * "> P75 fortaleza consolidada", "> P25 y <= P75 es Brecha".
+ *
+ * Antes eran fortaleza >= P75 y brecha < P50, con la banda P50–P74 muda —ni una
+ * cosa ni la otra— que es lo que HU2 señalaba. Ahora las dos bandas se tocan y no
+ * queda ninguna dimensión sin clasificar.
+ *
+ * QUÉ PASA DEBAJO DE P25, que la respuesta no nombró: cuenta como brecha igual. La
+ * respuesta define la banda (P25, P75] como "Brecha" y deja sin nombre lo que está
+ * más abajo, pero una dimensión en P10 no puede ser menos brecha que una en P75;
+ * dejarla afuera la borraría de las áreas de desarrollo del informe, que es lo
+ * contrario de lo que pide la HU. Si el PO quiere un nombre aparte para esa banda
+ * —"Brecha alta", "Riesgo"— es agregar un rótulo, no cambiar quién entra.
+ *
+ * OJO CON P75, que ahora significa dos cosas distintas en el mismo informe: las
+ * tablas de las secciones 1 a 4 lo rotulan "Alto" (`nivelPorPercentil`, que sigue
+ * en >= 75 porque el PO fijó ahí sólo el corte Medio/Bajo) y el punto 5 lo cuenta
+ * como Brecha. Está anotado en el plan como lo próximo a resolver.
+ */
+var CORTE_FORTALEZA = 75;
+
+/** Fortaleza Consolidada: estrictamente por encima de P75. */
+function esFortalezaConsolidada(percentil) {
+  return percentil > CORTE_FORTALEZA;
+}
+
+/** Brecha: todo lo que no llega a superar P75. Ver el comentario de arriba. */
+function esBrecha(percentil) {
+  return percentil <= CORTE_FORTALEZA;
+}
+
 /**
  * Las dimensiones que componen cada estilo de CELID-A.
  *
@@ -537,22 +573,28 @@ function fraseHallazgo(cam, cel) {
  * la contradicción entre secciones que describe HU2, resuelta por construcción en
  * vez de por cuidado al escribir.
  *
- * Los cortes son los que ya estaban, con sus defectos declarados: fortaleza >= 75,
- * brecha < 50, la banda P50–P74 muda, y el Laissez-Faire al revés. No se tocan acá.
- * Unificarlos es la pregunta 3 al PO; moverlos por cuenta propia cambiaría el
- * contenido de todos los informes sin que nadie lo haya firmado.
+ * Los cortes salen de `esBrecha`, que es la definición firmada por el PO.
  */
 function brechasDeDesarrollo(neo, cel, cam, con) {
   var neuroticismoAlto = neo.nivel.N === 'Alto' || neo.nivel.N === 'Muy Alto';
   return {
-    laissez: cel.Laissez >= 75,
-    directivo: cam.Dir < 50,
-    recompensa: cel.RecCont < 50,
-    dirExcepcion: cel.DirExc < 50,
-    carisma: cel.Carisma < 50,
-    estimInt: cel.EstimInt < 50,
-    tarea: con.Tar < 50,
-    cambio: con.Camb < 50,
+    // El Laissez-Faire va al revés: acá el percentil alto ES el problema, así que
+    // no se le puede aplicar `esBrecha` —lo daría vuelta y marcaría justo a quien
+    // no cae en la no-intervención—. La respuesta del PO no habla de la escala
+    // invertida, así que la brecha se define por el nivel: "Alto en Laissez-Faire".
+    //
+    // Antes acá decía `>= 75` y en Sintesis.gs la misma brecha se deriva del nivel
+    // (`nivel === 'Alto'`). Mientras Alto fue >= P75 las dos formas coincidían; con
+    // el corte nuevo discrepaban exactamente en P75, y la sección 3 podía listar una
+    // brecha de Laissez-Faire que el punto 5 redactado por el LLM no reconocía.
+    laissez: nivelPorPercentil(cel.Laissez) === 'Alto',
+    directivo: esBrecha(cam.Dir),
+    recompensa: esBrecha(cel.RecCont),
+    dirExcepcion: esBrecha(cel.DirExc),
+    carisma: esBrecha(cel.Carisma),
+    estimInt: esBrecha(cel.EstimInt),
+    tarea: esBrecha(con.Tar),
+    cambio: esBrecha(con.Camb),
     autorregulacion: neuroticismoAlto
   };
 }
