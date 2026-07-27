@@ -64,7 +64,29 @@
     }
     .campos { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     @media (max-width: 40rem) { .campos { grid-template-columns: 1fr; } }
-    .acciones { margin-top: 1.1rem; display: flex; align-items: center; gap: 1rem; }
+    /* Lo que cuelga de un campo: la acción que lo alimenta y su ayuda. Va pegado
+       al campo, no a la fila de acciones de abajo, porque no es una acción del
+       formulario sino de ese control. Así la fila de abajo conserva una sola
+       acción y no hay dudas de cuál es el botón que genera el informe. */
+    .bajo-campo {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-top: .45rem;
+      flex-wrap: wrap;
+    }
+    .ayuda { font-size: .78rem; color: #7b8794; }
+    /* Pie del formulario: una línea lo separa de los campos y la acción principal
+       queda alineada con el borde izquierdo, que es donde vuelve la vista después
+       de leer los campos de arriba. */
+    .acciones {
+      margin-top: 1.1rem;
+      padding-top: 1.1rem;
+      border-top: 1px solid var(--borde);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
     button {
       background: var(--cchh);
       color: #fff;
@@ -78,6 +100,8 @@
     button:hover:not(:disabled) { background: var(--cchh-claro); }
     button:disabled { opacity: .5; cursor: not-allowed; }
     button.secundario { background: transparent; color: var(--cchh); border: 1px solid var(--borde); }
+    button.secundario:hover:not(:disabled) { background: var(--cchh-fondo); }
+    button.chico { padding: .35rem .8rem; font-size: .82rem; font-weight: 600; }
     .spinner {
       width: 1.1rem; height: 1.1rem;
       border: 2px solid var(--borde);
@@ -162,6 +186,35 @@
     }
     nav.pestanias button[aria-selected="true"] { background: var(--cchh); color: #fff; border-color: var(--cchh); }
 
+    /* Selector de período. Un segmentado y no un <select>: son tres opciones que
+       conviene ver todas a la vez, y el cambio es instantáneo porque los tres
+       cortes ya vienen calculados del servidor. */
+    .segmentado { display: flex; gap: 0; }
+    .segmentado button {
+      background: #fff;
+      color: var(--cchh);
+      border: 1px solid var(--borde);
+      border-radius: 0;
+      padding: .35rem .9rem;
+      font-size: .82rem;
+    }
+    .segmentado button:first-child { border-radius: 6px 0 0 6px; }
+    .segmentado button:last-child { border-radius: 0 6px 6px 0; }
+    .segmentado button + button { border-left: 0; }
+    .segmentado button[aria-pressed="true"] { background: var(--cchh); color: #fff; border-color: var(--cchh); }
+    .titulo-con-accion {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .titulo-con-accion h2 { margin: 0; }
+    /* La variación contra el período anterior: el color dice el sentido, el signo
+       lo repite para no depender sólo del color. */
+    .variacion.sube { color: #2e7d32; }
+    .variacion.baja { color: #c62828; }
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
     @media (max-width: 46rem) { .kpis { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: var(--cchh-fondo); border-radius: 8px; padding: .9rem 1rem; }
@@ -198,6 +251,15 @@
         <div>
           <label for="planilla">Planilla de respuestas</label>
           <select id="planilla"><option value="">Cargando…</option></select>
+          <div class="bajo-campo">
+            <button type="button" id="subir" class="secundario chico">Subir planilla…</button>
+            <span class="ayuda">.xlsx o .xls, hasta 10 MB</span>
+          </div>
+          <!-- El input de archivo va escondido y lo dispara el botón: así la
+               subida se ve como el resto de los botones en vez de como el control
+               nativo, que cada navegador dibuja distinto. El botón es un <button>
+               de verdad, así que sigue llegando por teclado. -->
+          <input type="file" id="archivo" class="oculto" accept=".xlsx,.xls">
         </div>
         <div>
           <label for="evaluado">Persona evaluada</label>
@@ -249,12 +311,54 @@
       </section>
 
       <section>
-        <h2>Actividad y calidad</h2>
-        <div class="graficos">
-          <div class="grafico">
-            <h3>Informes por día</h3>
-            <div id="grafico-fechas"></div>
+        <div class="titulo-con-accion">
+          <h2>Actividad</h2>
+          <div class="segmentado" role="group" aria-label="Período">
+            <button id="periodo-dia" aria-pressed="false">Día</button>
+            <button id="periodo-semana" aria-pressed="true">Semana</button>
+            <button id="periodo-mes" aria-pressed="false">Mes</button>
           </div>
+        </div>
+        <div class="kpis">
+          <div class="kpi">
+            <div class="valor" id="kpi-periodo-actual">—</div>
+            <div class="rotulo" id="kpi-periodo-rotulo">informes esta semana</div>
+          </div>
+          <div class="kpi">
+            <div class="valor variacion" id="kpi-periodo-variacion">—</div>
+            <div class="rotulo" id="kpi-variacion-rotulo">contra la semana anterior</div>
+          </div>
+          <div class="kpi">
+            <div class="valor" id="kpi-periodo-usuarios">—</div>
+            <div class="rotulo">personas generando</div>
+          </div>
+          <div class="kpi">
+            <div class="valor" id="kpi-periodo-evaluados">—</div>
+            <div class="rotulo">personas evaluadas</div>
+          </div>
+        </div>
+        <div class="grafico" style="margin-top:1.25rem">
+          <h3 id="titulo-grafico-periodo">Informes por semana</h3>
+          <div id="grafico-periodo"></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Uso por persona</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Genera</th><th>Informes</th><th>Calificados</th>
+              <th>Calificación</th><th>Segundos</th><th>Último</th>
+            </tr>
+          </thead>
+          <tbody id="por-usuario"><tr><td colspan="6" class="vacio">Cargando…</td></tr></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Calidad</h2>
+        <div class="graficos">
           <div class="grafico">
             <h3>Distribución de calificaciones</h3>
             <div id="grafico-distribucion"></div>
@@ -309,7 +413,8 @@
       $('resultado').replaceChildren(aviso);
     }
 
-    function cargarPlanillas() {
+    /** @param {string=} seleccionar id de la planilla que queda elegida al recargar. */
+    function cargarPlanillas(seleccionar) {
       google.script.run
         .withSuccessHandler((planillas) => {
           const select = $('planilla');
@@ -320,6 +425,7 @@
           }
           select.appendChild(new Option('Elegí una planilla…', ''));
           planillas.forEach((p) => select.appendChild(new Option(p.nombre, p.id)));
+          if (seleccionar) select.value = seleccionar;
           $('generar').disabled = false;
         })
         .withFailureHandler((e) => {
@@ -328,6 +434,57 @@
         })
         .listarPlanillas();
     }
+
+    // ── Subida de planillas ───────────────────────────────────────
+    // El archivo viaja en base64 dentro de google.script.run: la app corre en un
+    // iframe de Apps Script y no hay un endpoint al que hacerle un POST.
+
+    function subiendo(activo) {
+      $('subir').disabled = activo;
+      $('subir').textContent = activo ? 'Subiendo…' : 'Subir planilla…';
+      // Generar queda bloqueado mientras tanto: la lista está por cambiar y sería
+      // fácil disparar un informe con la planilla anterior todavía seleccionada.
+      $('generar').disabled = activo;
+    }
+
+    function subirArchivo(archivo) {
+      const lector = new FileReader();
+      lector.onerror = () => {
+        subiendo(false);
+        mostrarAviso('error', ['No se pudo leer el archivo de la máquina.']);
+      };
+      lector.onload = () => {
+        // readAsDataURL da "data:<mime>;base64,<datos>": al servidor va sólo la
+        // segunda parte.
+        const datosBase64 = String(lector.result).split(',')[1] || '';
+        google.script.run
+          .withSuccessHandler((planilla) => {
+            subiendo(false);
+            cargarPlanillas(planilla.id);
+            mostrarAviso('ok', ['Planilla subida: ' + planilla.nombre + '. Ya está elegida.']);
+            $('evaluado').focus();
+          })
+          .withFailureHandler((e) => {
+            subiendo(false);
+            mostrarAviso('error', [e.message]);
+          })
+          .subirPlanilla({ nombre: archivo.name, datosBase64: datosBase64 });
+      };
+      lector.readAsDataURL(archivo);
+    }
+
+    $('subir').addEventListener('click', () => $('archivo').click());
+
+    $('archivo').addEventListener('change', (evento) => {
+      const archivo = evento.target.files[0];
+      // Se limpia enseguida para que elegir dos veces el mismo archivo —después de
+      // corregirlo, por ejemplo— vuelva a disparar el evento change.
+      evento.target.value = '';
+      if (!archivo) return;
+      subiendo(true);
+      $('resultado').replaceChildren();
+      subirArchivo(archivo);
+    });
 
     function cargarHistorial() {
       google.script.run
@@ -666,7 +823,87 @@
       return partes.length === 3 ? `${partes[2]}/${partes[1]}` : String(fecha);
     }
 
+    // ── Período del tablero ───────────────────────────────────────
+    // La semana es lo que se muestra al entrar: el día es ruidoso —hay días sin
+    // ninguna corrida— y el mes tarda demasiado en decir algo.
+    let granularidad = 'semana';
+    // Las tres granularidades vienen calculadas en la misma respuesta, así que
+    // cambiar de período no vuelve a pedirle nada al servidor.
+    let metricas = null;
+
+    const NOMBRE_PERIODO = {
+      dia: { titulo: 'Informes por día', actual: 'informes hoy', anterior: 'contra ayer' },
+      semana: { titulo: 'Informes por semana', actual: 'informes esta semana', anterior: 'contra la semana anterior' },
+      mes: { titulo: 'Informes por mes', actual: 'informes este mes', anterior: 'contra el mes anterior' },
+    };
+
+    function dibujarPeriodo() {
+      if (!metricas) return;
+      const nombres = NOMBRE_PERIODO[granularidad];
+      const resumen = metricas.resumenPorPeriodo[granularidad];
+
+      $('titulo-grafico-periodo').textContent = nombres.titulo;
+      $('kpi-periodo-rotulo').textContent = nombres.actual;
+      $('kpi-variacion-rotulo').textContent = nombres.anterior;
+
+      $('kpi-periodo-actual').textContent = resumen.actual;
+      $('kpi-periodo-usuarios').textContent = resumen.usuariosActivos;
+      $('kpi-periodo-evaluados').textContent = resumen.evaluados;
+
+      const variacion = $('kpi-periodo-variacion');
+      variacion.className = 'valor variacion';
+      if (resumen.variacion === null) {
+        // Sin período anterior no hay contra qué comparar. Un 0 % o un 100 %
+        // inventado se leería como un dato.
+        variacion.textContent = '—';
+      } else {
+        variacion.textContent = (resumen.variacion > 0 ? '+' : '') + resumen.variacion + '%';
+        if (resumen.variacion > 0) variacion.classList.add('sube');
+        if (resumen.variacion < 0) variacion.classList.add('baja');
+      }
+
+      graficoDeBarras($('grafico-periodo'),
+        metricas.porPeriodo[granularidad].map((p) => ({ rotulo: p.etiqueta, valor: p.cantidad })));
+    }
+
+    function elegirPeriodo(cual) {
+      granularidad = cual;
+      ['dia', 'semana', 'mes'].forEach((g) => {
+        $('periodo-' + g).setAttribute('aria-pressed', String(g === cual));
+      });
+      dibujarPeriodo();
+    }
+
+    ['dia', 'semana', 'mes'].forEach((g) => {
+      $('periodo-' + g).addEventListener('click', () => elegirPeriodo(g));
+    });
+
+    function dibujarPorUsuario(porUsuario) {
+      const cuerpo = $('por-usuario');
+      if (!porUsuario.length) {
+        cuerpo.replaceChildren(fila(['Todavía no se generó ningún informe'], 'vacio', 6));
+        return;
+      }
+      cuerpo.replaceChildren(...porUsuario.map((u) => {
+        const tr = document.createElement('tr');
+        [
+          u.usuario,
+          u.informes,
+          u.calificados + ' (' + u.porcentajeCalificado + '%)',
+          u.promedioCalificacion === null ? '—' : u.promedioCalificacion,
+          u.promedioSegundos === null ? '—' : u.promedioSegundos,
+          diaYMes(u.ultima),
+        ].forEach((valor) => {
+          const td = document.createElement('td');
+          td.textContent = valor;
+          tr.appendChild(td);
+        });
+        return tr;
+      }));
+    }
+
     function dibujarMetricas(m) {
+      metricas = m;
       $('kpi-total').textContent = m.total;
       $('kpi-calificacion').textContent = m.promedioCalificacion || '—';
       $('kpi-tiempo').textContent = m.promedioSegundos || '—';
@@ -683,8 +920,9 @@
         alerta.replaceChildren();
       }
 
-      graficoDeBarras($('grafico-fechas'),
-        m.porFecha.map((f) => ({ rotulo: diaYMes(f.fecha), valor: f.cantidad })));
+      dibujarPeriodo();
+      dibujarPorUsuario(m.porUsuario);
+
       graficoDeBarras($('grafico-distribucion'),
         m.distribucion.map((d) => ({ rotulo: d.puntaje + '★', valor: d.cantidad })));
       graficoDeLinea($('grafico-tendencia'),
@@ -711,7 +949,7 @@
     function cargarMetricas() {
       google.script.run
         .withSuccessHandler(dibujarMetricas)
-        .withFailureHandler((e) => sinDatos($('grafico-fechas'), e.message))
+        .withFailureHandler((e) => sinDatos($('grafico-periodo'), e.message))
         .obtenerMetricas();
     }
 

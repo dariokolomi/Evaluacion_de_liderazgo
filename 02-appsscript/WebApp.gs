@@ -31,7 +31,7 @@ var TITULO = 'Informes de Liderazgo — CCHH';
  * mismo que un despliegue, y un número que se mueve sin que nadie lo decida no
  * sirve para hablar de "la 2.4".
  */
-var VERSION_APP = 'v2.13';
+var VERSION_APP = 'v2.14';
 
 var LIMITE_HISTORIAL_COMPLETO = 5000;
 
@@ -102,6 +102,78 @@ function listarPlanillas() {
   return planillas;
 }
 
+/**
+ * Cuánto puede pesar una planilla que se sube desde el navegador.
+ *
+ * Las reales pesan entre 20 y 60 KB. Diez megas es holgado para cualquier
+ * variante con imágenes pegadas y sigue siendo chico para lo que aguanta
+ * google.script.run, que es por donde viaja el archivo en base64.
+ */
+var MAX_PLANILLA_BYTES = 10 * 1024 * 1024;
+
+var EXTENSIONES_DE_PLANILLA = ['.xlsx', '.xls'];
+
+/**
+ * Deja una planilla nueva en la carpeta configurada.
+ *
+ * Hasta ahora la única forma de sumar una planilla era dejarla a mano en la
+ * carpeta de Drive: quien no tuviera acceso a la carpeta —o no supiera cuál
+ * es— no podía generar un informe aunque tuviera la planilla en la máquina.
+ *
+ * El archivo se guarda tal como llega, sin convertirlo a Google Sheets:
+ * `abrirComoPlanilla` (Informe.gs) ya convierte al vuelo cuando genera el
+ * informe y descarta la copia al terminar. Convertir acá dejaría en la carpeta
+ * un archivo distinto del que subió la persona.
+ *
+ * Lo que NO se valida acá es que la planilla tenga las 5 hojas y las respuestas
+ * completas: eso exige convertirla y leerla entera, que es la mitad del trabajo
+ * de generar el informe. La generación ya lo valida y lo dice con precisión
+ * ("La planilla no tiene la hoja CELID-A", "faltan los ítems 3, 7").
+ *
+ * @param {Object} pedido {nombre, datosBase64}
+ * @return {Object} {id, nombre} de la planilla guardada
+ */
+function subirPlanilla(pedido) {
+  var config = configuracion();
+  exigirAcceso(config.grupoAutorizado);
+
+  var nombre = nombreDeArchivoSeguro((pedido && pedido.nombre) || '');
+  var datos = (pedido && pedido.datosBase64) || '';
+  if (!nombre) throw new Error('El archivo no tiene nombre.');
+  if (!datos) throw new Error('El archivo llegó vacío.');
+  if (!extensionDePlanilla(nombre)) {
+    throw new Error('Sólo se pueden subir planillas .xlsx o .xls. Llegó "' + nombre + '".');
+  }
+
+  var bytes = Utilities.base64Decode(datos);
+  if (bytes.length > MAX_PLANILLA_BYTES) {
+    throw new Error('La planilla pesa ' + Math.round(bytes.length / 1024 / 1024)
+      + ' MB y el máximo es ' + (MAX_PLANILLA_BYTES / 1024 / 1024) + ' MB.');
+  }
+
+  var blob = Utilities.newBlob(bytes, MIMES_DE_PLANILLA[1], nombre);
+  var archivo = DriveApp.getFolderById(config.carpetaPlanillasId).createFile(blob);
+  return { id: archivo.getId(), nombre: archivo.getName() };
+}
+
+function extensionDePlanilla(nombre) {
+  var minusculas = String(nombre).toLowerCase();
+  for (var i = 0; i < EXTENSIONES_DE_PLANILLA.length; i++) {
+    var extension = EXTENSIONES_DE_PLANILLA[i];
+    if (minusculas.slice(-extension.length) === extension) return true;
+  }
+  return false;
+}
+
+/**
+ * El nombre que manda el navegador, reducido a un nombre de archivo.
+ * Los separadores de ruta se cambian por guiones: un nombre con barras no puede
+ * crear carpetas en Drive, pero sí queda ilegible en la lista.
+ */
+function nombreDeArchivoSeguro(nombre) {
+  return String(nombre).replace(/[\/\\]+/g, '-').trim();
+}
+
 /** Genera el informe. Devuelve lo mismo que generarInforme(). */
 function generarDesdeInterfaz(pedido) {
   return generarInforme(pedido); // ya verifica configuración y acceso
@@ -133,7 +205,9 @@ function listarHistorial(limite) {
 function obtenerMetricas() {
   var config = configuracion();
   exigirAcceso(config.grupoAutorizado);
-  return metricasDe(leerCorridas(config.historialId, LIMITE_HISTORIAL_COMPLETO));
+  // El reloj se pasa desde acá: metricasDe() es pura y las series terminan en el
+  // período en curso, no en el de la última corrida.
+  return metricasDe(leerCorridas(config.historialId, LIMITE_HISTORIAL_COMPLETO), new Date());
 }
 
 function calificarInforme(fila, calificacion, comentario) {

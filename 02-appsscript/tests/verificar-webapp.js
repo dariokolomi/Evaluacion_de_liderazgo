@@ -75,6 +75,8 @@ function crearEntorno(escenario) {
     lock: { tipo: null, tomado: 0, suelto: 0 },
     // Hojas de respaldo creadas por el vaciado, con su contenido al momento de copiar.
     respaldos: [],
+    // Archivos que se crearon en Drive: la subida de planillas.
+    subidos: [],
   };
 
   const hoja = hojaFalsa(e.filas || [ENCABEZADO], registro);
@@ -131,7 +133,18 @@ function crearEntorno(escenario) {
         },
       },
       DriveApp: {
-        getFolderById: () => ({ getFiles: () => crearIterador() }),
+        getFolderById: (id) => ({
+          getFiles: () => crearIterador(),
+          // Se anota en qué carpeta se creó: una planilla subida a la carpeta de
+          // informes no sería un detalle menor, y el nombre de la propiedad no
+          // alcanza para saber que se usó la correcta.
+          createFile: (blob) => {
+            registro.subidos.push({
+              carpeta: id, nombre: blob.getName(), bytes: blob.getBytes().length,
+            });
+            return { getId: () => 'subida-' + registro.subidos.length, getName: () => blob.getName() };
+          },
+        }),
         getFileById: (id) => {
           if (!(id in enDrive)) throw new Error('No se encontró el archivo con el id ' + id);
           return { isTrashed: () => !!enDrive[id].papelera };
@@ -169,7 +182,15 @@ function crearEntorno(escenario) {
           remove: (k) => { delete registro.cache[k]; },
         }),
       },
-      Utilities: { formatDate: () => '23/07/2026 18:15' },
+      Utilities: {
+        formatDate: () => '23/07/2026 18:15',
+        base64Decode: (texto) => Array.from(Buffer.from(String(texto), 'base64')),
+        newBlob: (bytes, tipo, nombre) => ({
+          getName: () => nombre,
+          getBytes: () => bytes,
+          getContentType: () => tipo,
+        }),
+      },
       DocumentApp: {}, MimeType: {}, UrlFetchApp: {}, ScriptApp: {}, Drive: {}, Charts: {},
       console: { warn: () => {} },
     },
@@ -184,7 +205,7 @@ function cargarGs(globales) {
     `${fuente}\nreturn { doGet, listarPlanillas, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml,
        progresoDeInforme, marcarEtapa, limpiarProgreso, ETAPAS_INFORME, VERSION_APP,
        compararHistorialConDrive, idDeUrlDeDrive, contarCorridas, vaciarCorridas,
-       HOJA_RESPALDO_PREFIJO };`
+       HOJA_RESPALDO_PREFIJO, subirPlanilla, MAX_PLANILLA_BYTES };`
   )(...nombres.map((n) => globales[n]));
 }
 
@@ -239,6 +260,53 @@ function main() {
     !planillas.error && planillas.valor[0].nombre === 'Planilla nueva');
   revisar('listarPlanillas exige acceso por su cuenta',
     !!intentar(() => gsSinAcceso.listarPlanillas()).error);
+
+  // ── subirPlanilla ──
+  // Es la única función que crea algo en Drive con lo que manda el navegador, así
+  // que lo que importa es dónde lo deja y qué acepta.
+  const enBase64 = (texto) => Buffer.from(texto).toString('base64');
+
+  const subida = intentar(() => gs.subirPlanilla({
+    nombre: 'Planilla de Ana.xlsx', datosBase64: enBase64('contenido'),
+  }));
+  revisar('la planilla subida va a la carpeta de planillas, no a otra',
+    !subida.error && normal.registro.subidos.length === 1
+    && normal.registro.subidos[0].carpeta === CARPETA_PLANILLAS,
+    subida.error ? subida.error.message : JSON.stringify(normal.registro.subidos[0]));
+  revisar('conserva el nombre del archivo y devuelve su id para poder elegirla',
+    !subida.error && subida.valor.nombre === 'Planilla de Ana.xlsx' && !!subida.valor.id,
+    JSON.stringify(subida.valor));
+  revisar('y guarda los bytes decodificados, no el texto en base64',
+    normal.registro.subidos[0].bytes === 'contenido'.length,
+    normal.registro.subidos[0].bytes);
+
+  revisar('rechaza lo que no sea una planilla',
+    !!intentar(() => gs.subirPlanilla({ nombre: 'informe.pdf', datosBase64: enBase64('x') })).error
+    && !!intentar(() => gs.subirPlanilla({ nombre: 'notas.docx', datosBase64: enBase64('x') })).error);
+  revisar('acepta .xls además de .xlsx, y no le importan las mayúsculas',
+    !intentar(() => gs.subirPlanilla({ nombre: 'vieja.XLS', datosBase64: enBase64('x') })).error);
+  revisar('rechaza el archivo vacío y el que llega sin nombre',
+    !!intentar(() => gs.subirPlanilla({ nombre: 'p.xlsx', datosBase64: '' })).error
+    && !!intentar(() => gs.subirPlanilla({ nombre: '', datosBase64: enBase64('x') })).error
+    && !!intentar(() => gs.subirPlanilla()).error);
+
+  const gigante = intentar(() => gs.subirPlanilla({
+    nombre: 'enorme.xlsx', datosBase64: enBase64('x'.repeat(gs.MAX_PLANILLA_BYTES + 1)),
+  }));
+  revisar('rechaza la planilla que se pasa del máximo, y dice cuánto pesa',
+    !!gigante.error && /MB/.test(gigante.error.message), gigante.error && gigante.error.message);
+
+  const conRuta = intentar(() => gs.subirPlanilla({
+    nombre: 'C:\\Escritorio\\Planilla.xlsx', datosBase64: enBase64('x'),
+  }));
+  revisar('las barras del nombre no viajan a Drive',
+    !conRuta.error && conRuta.valor.nombre.indexOf('\\') < 0,
+    conRuta.valor && conRuta.valor.nombre);
+
+  revisar('subirPlanilla exige acceso por su cuenta',
+    !!intentar(() => gsSinAcceso.subirPlanilla({ nombre: 'p.xlsx', datosBase64: enBase64('x') })).error);
+  revisar('y no crea nada en Drive cuando el acceso se niega',
+    sinAcceso.registro.subidos.length === 0, sinAcceso.registro.subidos.length);
 
   // ── listarHistorial ──
   const conCorridas = crearEntorno({
