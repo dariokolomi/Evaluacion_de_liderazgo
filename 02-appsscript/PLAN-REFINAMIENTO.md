@@ -282,6 +282,26 @@ aparecieron al cruzar el refinamiento con el código.
 9. **Visibilidad del dato de origen** (P2 del PO). ¿El informe que recibe el líder muestra
    el valor numérico que originó cada interpretación, o eso queda solo en la trazabilidad
    interna? Cambia el render, no el motor.
+10. **Criterio de predominancia del estilo** (sección 3 y bloque 2.2).
+    **Respondido el 2026-07-27:** *"debe considerar el predominante el estilo con
+    percentil más alto"*. Antes se decidía por la media de la escala 1 a 5. Aplicado en
+    `Perfil.gs`; el criterio nuevo tiene a favor que las medias de los tres estilos no
+    son comparables entre sí —cada escala tiene su baremo, y el del Laissez-Faire es
+    mucho más bajo— mientras que el percentil sí los pone en la misma referencia.
+
+    Queda abierta una sub-pregunta que la respuesta no cubre: **qué hacer con los
+    empates**. Como los baremos devuelven solo nueve percentiles, dos estilos empatan
+    seguido (2 de los 3 perfiles reales de referencia, 25 % de los sintéticos).
+    Implementado como perfil mixto —un empate no se desempata—, lo que cambia a Chavo y
+    Chavo 1 de "Líder Relacional-Transformacional" a "Líder Relacional, sin un estilo
+    claramente predominante", aunque su media Transformacional (4,47) esté muy por
+    encima de la del Laissez-Faire (3,00), que empata con ella en P75. Si el PO
+    prefiere desempatar por la media, es un criterio más en el orden.
+
+    Efecto secundario a mirar: con percentiles, el Laissez-Faire predomina bastante más
+    seguido que antes, por lo mismo —su baremo es bajo—, y la etiqueta resultante
+    ("Líder Relacional-Laissez-Faire") va a aparecer en informes donde antes no aparecía.
+
 ---
 
 ## 5. Lo que se puede hacer sin esperar respuestas
