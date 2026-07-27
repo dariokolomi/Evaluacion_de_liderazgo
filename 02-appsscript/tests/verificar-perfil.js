@@ -34,7 +34,9 @@ function cargarGs() {
     .join('\n');
   return new Function(`${fuente}\nreturn { corregir, clasificarPerfil, frasePerfilCelid,
     fraseSituacional, fraseTransformacional, fraseTransaccional, fraseLaissez,
-    fraseHallazgo, MARGEN_PREDOMINANCIA, MARGEN_EJE };`)();
+    fraseHallazgo, brechasDeDesarrollo, competenciasADesarrollar, lecturaDelMapa,
+    frasesLecturaDelMapa, MARGEN_PREDOMINANCIA, MARGEN_EJE,
+    DISTANCIA_CONSOLIDADA, DISTANCIA_BRECHA_PRINCIPAL };`)();
 }
 
 const gs = cargarGs();
@@ -304,6 +306,152 @@ frase = gs.fraseHallazgo({ Cons: 90, Part: 30, Dir: 50, Or: 50 }, cel({ Laissez:
 ok(/combinación de un alto Liderazgo Considerado \(P90\) con una presencia/.test(frase),
   'con una sola conducta alta, la frase nombra sólo esa', frase);
 ok(!/P30/.test(frase), 'y no suma el Participativo bajo a la afirmación', frase);
+
+// ═══════════════════════════════════════════════════════════════════
+// Sección 3 — la tabla de competencias a desarrollar
+// ═══════════════════════════════════════════════════════════════════
+
+/** Un perfil sin ninguna brecha, sobre el que se enciende una cosa por vez. */
+function competencias({ celid, camin, conlid, neoNivel, neoT, menosDesarrollado }) {
+  const neo = {
+    nivel: Object.assign({ N: 'Promedio', A: 'Promedio', E: 'Promedio' }, neoNivel || {}),
+    t: Object.assign({ N: 50, A: 50, E: 50 }, neoT || {}),
+  };
+  return gs.competenciasADesarrollar(
+    neo,
+    cel(Object.assign({ Laissez: 10, RecCont: 90, Carisma: 90, EstimInt: 90, DirExc: 90 }, celid || {})),
+    Object.assign({ Dir: 90, Cons: 50, Part: 50, Or: 50 }, camin || {}),
+    Object.assign({ Tar: 90, Rel: 90, Camb: 90 }, conlid || {}),
+    { menosDesarrollado: { nombre: menosDesarrollado || 'Considerado' } });
+}
+const titulos = (filas) => filas.map((f) => f[0]);
+
+// Sin brechas no se emite un plan de desarrollo de seis puntos.
+let filas = competencias({});
+ok(filas.length === 1 && filas[0][0] === 'Sin competencias con brecha',
+  'un perfil sin brechas no recibe seis competencias a desarrollar', JSON.stringify(titulos(filas)));
+ok(!/^\d\. /.test(filas[0][0]),
+  'y esa fila única no va numerada, porque no es la primera de una lista', filas[0][0]);
+
+// Cada condición enciende su competencia y sólo la suya.
+ok(titulos(competencias({ celid: { Laissez: 75 } })).join() === '1. Reducir episodios de Laissez-Faire',
+  'P75 en Laissez-Faire enciende la competencia 1 y nada más',
+  JSON.stringify(titulos(competencias({ celid: { Laissez: 75 } }))));
+ok(titulos(competencias({ celid: { Laissez: 74 } })).join() === 'Sin competencias con brecha',
+  'P74 no llega al corte');
+ok(titulos(competencias({ camin: { Dir: 49 } })).join() === '1. Fortalecer el Liderazgo Directivo',
+  'P49 en Directivo enciende la competencia del Directivo');
+ok(titulos(competencias({ camin: { Dir: 50 } })).join() === 'Sin competencias con brecha',
+  'P50 exacto no es brecha: el corte es estricto');
+
+// La numeración se arma con las que quedaron, no con la posición del catálogo.
+filas = competencias({ celid: { Laissez: 90, RecCont: 10 }, conlid: { Camb: 10 } });
+ok(titulos(filas).join(' / ') === '1. Reducir episodios de Laissez-Faire'
+  + ' / 2. Incrementar la Recompensa Contingente / 3. Resiliencia y Gestión del Cambio',
+  'tres competencias salteadas del catálogo se numeran 1, 2 y 3',
+  JSON.stringify(titulos(filas)));
+
+// La Amabilidad se invoca sólo si está alta: el fundamento decía "Alta Amabilidad"
+// con T=30 y todo.
+filas = competencias({ celid: { Laissez: 90 }, neoNivel: { A: 'Bajo' }, neoT: { A: 30 } });
+ok(!/Amabilidad/.test(filas[0][1]),
+  'con la Amabilidad baja no se la nombra como obstáculo para confrontar', filas[0][1]);
+filas = competencias({ celid: { Laissez: 90 }, neoNivel: { A: 'Muy Alto' }, neoT: { A: 70 } });
+ok(/Amabilidad muy alta \(T=70\)/.test(filas[0][1]),
+  'y con la Amabilidad muy alta sí, concordando en género', filas[0][1]);
+
+// Carisma y Estimulación Intelectual: se nombra la que está por debajo del corte.
+filas = competencias({ celid: { Carisma: 20 } });
+ok(filas[0][0] === '1. Desarrollar Carisma',
+  'con sólo el Carisma bajo, la competencia no arrastra la Estimulación Intelectual', filas[0][0]);
+ok(!/desafíos intelectuales/.test(filas[0][2]),
+  'y la acción tampoco', filas[0][2]);
+filas = competencias({ celid: { Carisma: 20, EstimInt: 30 } });
+ok(filas[0][0] === '1. Desarrollar Carisma y Estimulación Intelectual',
+  'con las dos, la fila queda como la del informe original', filas[0][0]);
+ok(/Carisma P20 \(nivel bajo\) y Estimulación Intelectual P30 \(nivel medio\)/.test(filas[0][1]),
+  'y cada una declara su nivel real, no "en nivel Medio" para las dos', filas[0][1]);
+
+// "sostener el estilo Considerado" era otro supuesto: sólo si el Considerado está alto.
+filas = competencias({ neoNivel: { N: 'Alto' }, neoT: { N: 65 }, camin: { Cons: 30 } });
+ok(/base para sostener el rol sin agotamiento/.test(filas[0][1]),
+  'con el Considerado bajo no se afirma que ése sea el estilo a sostener', filas[0][1]);
+filas = competencias({ neoNivel: { N: 'Alto' }, neoT: { N: 65 }, camin: { Cons: 90 } });
+ok(/sostener el estilo Considerado/.test(filas[0][1]),
+  'y con el Considerado alto sí', filas[0][1]);
+
+// El Neuroticismo alto enciende dos competencias, como en el informe original.
+ok(competencias({ neoNivel: { N: 'Muy Alto' }, neoT: { N: 70 } }).length === 2,
+  'el Neuroticismo alto enciende autorregulación y resiliencia');
+
+ok(gs.brechasDeDesarrollo({ nivel: { N: 'Alto' }, t: { N: 65 } },
+  cel({ Laissez: 75, RecCont: 49, Carisma: 49, EstimInt: 49, DirExc: 49 }),
+  { Dir: 49 }, { Tar: 49, Camb: 49 }).autorregulacion === true,
+  'brechasDeDesarrollo expone la condición de autorregulación por separado');
+
+// ═══════════════════════════════════════════════════════════════════
+// Sección 4 — la lectura del radar
+// ═══════════════════════════════════════════════════════════════════
+
+/** Radar de 14 ejes: el ideal real, y el evaluado con lo que se declare. */
+function radarCon(evaluado) {
+  const ideal = [90, 85, 90, 90, 85, 75, 70, 75, 80, 90, 85, 75, 85, 85];
+  return { ideal, evaluado: ideal.map((v, i) => (evaluado[i] === undefined ? v : evaluado[i])) };
+}
+
+// Los tres grupos salen de la distancia, y el corte es el declarado.
+let mapa = gs.lecturaDelMapa(radarCon({ 0: 80, 1: 65, 2: 40 }), 10);
+ok(mapa.consolidadas.some((d) => d.nombre === 'Carisma'),
+  'a 10 puntos del ideal (P80 contra P90), la dimensión está en el grupo cercano',
+  JSON.stringify(mapa.consolidadas.map((d) => d.nombre)));
+ok(mapa.moderadas.some((d) => d.nombre === 'Estimulación Intelectual'),
+  'a 20 del ideal, queda en distancia intermedia',
+  JSON.stringify(mapa.moderadas.map((d) => d.nombre)));
+ok(mapa.principales.some((d) => d.nombre === 'Inspiración'),
+  'a 50 del ideal, queda en el grupo lejano');
+
+// Los dos bordes, que es donde un cambio de umbral se tiene que notar.
+mapa = gs.lecturaDelMapa(radarCon({ 0: 79, 1: 55 }), 10);
+ok(mapa.moderadas.some((d) => d.nombre === 'Carisma'),
+  'a 11 del ideal ya no es cercana', JSON.stringify(mapa.moderadas.map((d) => d.nombre)));
+ok(mapa.principales.some((d) => d.nombre === 'Estimulación Intelectual'),
+  'y a 30 exactos ya es lejana, no intermedia',
+  JSON.stringify(mapa.principales.map((d) => d.nombre)));
+ok(gs.DISTANCIA_CONSOLIDADA === 10 && gs.DISTANCIA_BRECHA_PRINCIPAL === 30,
+  'los dos umbrales siguen declarados donde el PO los puede ver');
+
+// El Laissez-Faire entra invertido al radar y se muestra con su percentil crudo.
+mapa = gs.lecturaDelMapa(radarCon({ 4: 95 }), 5);
+const laissez = mapa.consolidadas.find((d) => d.nombre === 'Laissez-Faire');
+ok(laissez && laissez.percentil === 5,
+  'el Laissez-Faire se muestra con el percentil crudo, no con el del gráfico',
+  laissez && String(laissez.percentil));
+ok(laissez && laissez.distancia === -10,
+  'pero la distancia se mide sobre el valor invertido del gráfico',
+  laissez && String(laissez.distancia));
+
+let lineas = gs.frasesLecturaDelMapa(radarCon({ 4: 95 }), 5);
+ok(/Laissez-Faire \(P5 — invertido en gráfico\)/.test(lineas[0]),
+  'y la línea lo aclara, sin ponerle al lado un ideal de la escala dada vuelta', lineas[0]);
+ok(!/Laissez-Faire \(P5 vs ideal/.test(lineas[0]),
+  'porque comparar un percentil crudo contra el ideal invertido induciría al error');
+
+// Un grupo vacío se dice.
+lineas = gs.frasesLecturaDelMapa(radarCon({}), 10);
+ok(/^Mayor distancia al perfil ideal: ninguna dimensión/.test(lineas[1]),
+  'sin dimensiones lejanas, la línea lo dice en vez de rellenar', lineas[1]);
+ok(/^Distancia intermedia: ninguna dimensión/.test(lineas[2]),
+  'y lo mismo con la intermedia', lineas[2]);
+
+// El orden pone primero lo más lejano, que es lo que hace útil la lista.
+lineas = gs.frasesLecturaDelMapa(radarCon({ 0: 20, 1: 50, 2: 10 }), 10);
+ok(lineas[1].indexOf('Inspiración') < lineas[1].indexOf('Carisma'),
+  'las lejanas van de mayor a menor distancia', lineas[1]);
+
+// La separación de vocabularios: es lo que impide que vuelva la contradicción.
+ok(!/[Ff]ortaleza|[Bb]recha/.test(lineas.join(' ')),
+  'la lectura del mapa no usa las palabras del punto 5, que clasifica con otra regla',
+  lineas.join(' | '));
 
 // ── Regresión sobre los perfiles reales ──
 // El informe viejo etiquetaba a todos como "Líder Relacional-Transformacional".

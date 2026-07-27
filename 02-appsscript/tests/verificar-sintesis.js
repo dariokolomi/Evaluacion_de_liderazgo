@@ -526,7 +526,9 @@ ok(corteRecupera.sintesisDeLiderazgo('Fran', resultados).sintesis !== null,
 const { DocumentApp, Body } = require('./stub-documentapp');
 
 function cargarDocumento() {
-  const fuente = ['Correccion.gs', 'Textos.gs', 'Documento.gs']
+  // Perfil.gs entra porque la síntesis determinista pasó a decidir sus áreas de
+  // desarrollo con `brechasDeDesarrollo`, la misma función que usa la sección 3.
+  const fuente = ['Correccion.gs', 'Textos.gs', 'Perfil.gs', 'Documento.gs']
     .map((a) => fs.readFileSync(path.join(RAIZ, a), 'utf8'))
     .join('\n');
   return new Function('DocumentApp', `${fuente}\nreturn { seccionSintesis };`)(DocumentApp);
