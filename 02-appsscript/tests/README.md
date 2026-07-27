@@ -13,12 +13,28 @@ node verificar-lectura.js       # Lectura.gs contra la referencia, y punta a pun
 node verificar-documento.js     # Documento.gs contra los informes de Python
 node verificar-radar.js         # Radar.gs: serie graficada y armado del gráfico
 node verificar-orquestador.js   # Informe.gs: flujo completo contra Drive simulado
-node verificar-webapp.js        # WebApp.gs: acceso, listados y calificaciones
+node verificar-webapp.js        # WebApp.gs: acceso, listados, subida y calificaciones
 node verificar-metricas.js      # Metricas.gs: los números del tablero
+node verificar-interfaz.js      # Interfaz.html: que el script y el marcado se correspondan
+node verificar-perfil.js        # Perfil.gs: las reglas de clasificación, escritas a mano
+node verificar-sintesis.js      # Sintesis.gs: el punto 5 y lo que se le manda al LLM
 ```
 
-Los cuatro verificadores de la app (`orquestador`, `webapp`, `metricas` y
-`radar`) no necesitan volcados de Python: corren sin haber ejecutado nada antes.
+Los seis verificadores de la app (`orquestador`, `webapp`, `metricas`, `radar`,
+`interfaz` y `perfil`) no necesitan volcados de Python: corren sin haber
+ejecutado nada antes.
+
+## Verificar la interfaz
+
+`verificar-interfaz.js` no simula un navegador: lee `Interfaz.html` y comprueba
+las correspondencias que el navegador da por sentadas y no reclama.
+`getElementById` de un id que nadie escribió devuelve `null`, y `null` no lanza
+hasta que alguien le pide una propiedad: un panel puede quedar a medio dibujar
+sin un solo error en la consola. Se verifica que cada `$('id')` del script exista
+en el marcado, y las decisiones de la pantalla que sí se pueden leer del archivo:
+que el botón de generar siga siendo la única acción principal, que el input de
+archivo esté escondido detrás de su botón y limitado a planillas, y que el
+tablero arranque en la semana.
 
 Para una corrida más exigente: `python3 dump-referencia.py --fuzz 2000`.
 
