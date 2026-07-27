@@ -35,7 +35,7 @@ function cargarGs() {
   return new Function(`${fuente}\nreturn { corregir, clasificarPerfil, frasePerfilCelid,
     fraseSituacional, fraseTransformacional, fraseTransaccional, fraseLaissez,
     fraseHallazgo, brechasDeDesarrollo, competenciasADesarrollar, lecturaDelMapa,
-    frasesLecturaDelMapa, MARGEN_PREDOMINANCIA, MARGEN_EJE,
+    frasesLecturaDelMapa, MARGEN_EJE,
     DISTANCIA_CONSOLIDADA, DISTANCIA_BRECHA_PRINCIPAL };`)();
 }
 
@@ -44,6 +44,10 @@ const gs = cargarGs();
 /**
  * Arma unos `resultados` con los valores que interesan.
  * `medias` son las de CELID (escala 1-5); el resto son percentiles.
+ *
+ * Ojo con los valores por omisión: los tres estilos arrancan en P50, o sea
+ * empatados, y un empate en el tope es perfil mixto. Todo caso que necesite un
+ * estilo predominante tiene que declarar `pctCelid`.
  */
 function perfilDe({ medias, pctCelid, camin, conlid }) {
   return gs.clasificarPerfil({
@@ -56,13 +60,16 @@ function perfilDe({ medias, pctCelid, camin, conlid }) {
   });
 }
 
-// ── El estilo predominante sale de las medias, no de los percentiles ──
-// Es la decisión de fondo: "predominante" es cuál ejerce más, que se lee en la
-// propia escala 1-5. El percentil contesta en cuál se destaca frente a la
-// población, que es otra pregunta.
-let p = perfilDe({ medias: { TransfTot: 4.5, TransTot: 3.4, Laissez: 2.0 } });
+// ── El estilo predominante sale del percentil, no de la media ──
+// Respuesta del PO del 2026-07-27. Las medias de los tres estilos no son
+// comparables entre sí —cada escala tiene su baremo—, así que el percentil es lo
+// único que los pone en la misma referencia.
+let p = perfilDe({
+  medias: { TransfTot: 4.5, TransTot: 3.4, Laissez: 2.0 },
+  pctCelid: { TransfTot: 90, TransTot: 50, Laissez: 25 },
+});
 ok(p.predominante && p.predominante.nombre === 'Transformacional',
-  'con la media más alta en Transformacional, ése es el predominante',
+  'con el percentil más alto en Transformacional, ése es el predominante',
   p.predominante && p.predominante.nombre);
 ok(p.mixto === false, 'y no se lo informa como mixto');
 
@@ -70,35 +77,50 @@ p = perfilDe({
   medias: { TransfTot: 4.5, TransTot: 3.0, Laissez: 2.0 },
   pctCelid: { TransfTot: 50, TransTot: 50, Laissez: 99 },
 });
-ok(p.predominante && p.predominante.nombre === 'Transformacional',
-  'el percentil más alto NO decide el predominante: manda la media',
+ok(p.predominante && p.predominante.nombre === 'Laissez-Faire',
+  'la media más alta NO decide: con P99 predomina el Laissez-Faire aunque su media'
+  + ' sea la más baja de las tres',
   p.predominante && p.predominante.nombre);
 
-// ── El margen mínimo evita la precisión falsa ──
-p = perfilDe({ medias: { TransfTot: 4.50, TransTot: 4.30, Laissez: 2.0 } });
+// ── Un empate en el tope no se desempata: es perfil mixto ──
+// Los baremos devuelven nueve percentiles, así que el empate es frecuente. Estos
+// son los valores reales de la planilla FM, que antes daba "Transformacional
+// predominante" por la media y ahora empata con el Laissez-Faire en P75.
+p = perfilDe({
+  medias: { TransfTot: 4.47, TransTot: 3.45, Laissez: 3.0 },
+  pctCelid: { TransfTot: 75, TransTot: 50, Laissez: 75 },
+});
 ok(p.mixto === true && p.predominante === null,
-  'con 0,20 de ventaja no hay predominante: el perfil es mixto');
+  'dos estilos en el mismo percentil más alto dan perfil mixto, sin inventar cuál manda');
+ok(p.estilos[0].nombre === 'Transformacional',
+  'entre los empatados ordena por media, para que la frase salga siempre igual',
+  p.estilos[0].nombre);
 
-p = perfilDe({ medias: { TransfTot: 4.80, TransTot: 4.50, Laissez: 2.0 } });
-ok(p.mixto === false,
-  'con una ventaja de 0,30 exactos sí hay predominante, sin que el punto flotante decida');
-
-p = perfilDe({ medias: { TransfTot: 4.50, TransTot: 4.20, Laissez: 2.0 } });
-ok(p.mixto === false, 'y lo mismo con los otros valores que dan 0,30');
-
-ok(gs.MARGEN_PREDOMINANCIA === 0.30,
-  'el margen de predominancia sigue declarado en 0,30', String(gs.MARGEN_PREDOMINANCIA));
+p = perfilDe({
+  medias: { TransfTot: 4.5, TransTot: 3.0, Laissez: 2.0 },
+  pctCelid: { TransfTot: 90, TransTot: 50, Laissez: 50 },
+});
+ok(p.mixto === false && p.predominante.nombre === 'Transformacional',
+  'un empate entre el segundo y el tercero no toca la predominancia del primero');
 
 // ── Laissez-Faire también puede predominar ──
-// No es una fortaleza, pero si es lo que más ejerce, el informe tiene que decirlo.
-p = perfilDe({ medias: { Laissez: 4.2, TransfTot: 3.0, TransTot: 2.5 } });
+// No es una fortaleza, pero si es donde más se destaca, el informe tiene que decirlo.
+p = perfilDe({
+  medias: { Laissez: 4.2, TransfTot: 3.0, TransTot: 2.5 },
+  pctCelid: { Laissez: 90, TransfTot: 50, TransTot: 25 },
+});
 ok(p.predominante && p.predominante.nombre === 'Laissez-Faire',
   'si el Laissez-Faire es el más alto, se informa como predominante',
   p.predominante && p.predominante.nombre);
 
 // ── El eje se decide con percentiles, que sí son comparables entre instrumentos ──
+// Estos casos no prueban la predominancia, así que dejan el Transformacional
+// claramente arriba y miran sólo el eje.
+const TRANSF_ARRIBA = { TransfTot: 90, TransTot: 50, Laissez: 25 };
+const MEDIAS_CUALESQUIERA = { TransfTot: 4.5, TransTot: 3.0, Laissez: 2.0 };
+
 p = perfilDe({
-  medias: { TransfTot: 4.5, TransTot: 3.0, Laissez: 2.0 },
+  medias: MEDIAS_CUALESQUIERA, pctCelid: TRANSF_ARRIBA,
   camin: { Cons: 90, Part: 90, Dir: 25 },
   conlid: { Rel: 90, Tar: 25 },
 });
@@ -107,14 +129,14 @@ ok(p.etiqueta === 'Líder Relacional-Transformacional',
   'y la etiqueta compone eje y estilo', p.etiqueta);
 
 p = perfilDe({
-  medias: { TransfTot: 4.5, TransTot: 3.0, Laissez: 2.0 },
+  medias: MEDIAS_CUALESQUIERA, pctCelid: TRANSF_ARRIBA,
   camin: { Cons: 25, Part: 25, Dir: 90 },
   conlid: { Rel: 25, Tar: 90 },
 });
 ok(p.eje === 'Orientado a la Tarea', 'y al revés, el eje es Orientado a la Tarea', p.eje);
 
 p = perfilDe({
-  medias: { TransfTot: 4.5, TransTot: 3.0, Laissez: 2.0 },
+  medias: MEDIAS_CUALESQUIERA, pctCelid: TRANSF_ARRIBA,
   camin: { Cons: 50, Part: 50, Dir: 50 },
   conlid: { Rel: 50, Tar: 50 },
 });
@@ -124,12 +146,12 @@ ok(p.etiqueta === 'Líder Transformacional',
 
 // El margen del eje: 15 puntos de percentil.
 p = perfilDe({
-  medias: { TransfTot: 4.5, TransTot: 3.0, Laissez: 2.0 },
+  medias: MEDIAS_CUALESQUIERA, pctCelid: TRANSF_ARRIBA,
   camin: { Cons: 60, Part: 60, Dir: 50 }, conlid: { Rel: 60, Tar: 50 },
 });
 ok(p.eje === 'Equilibrado', 'una ventaja de 10 puntos no alcanza para declarar el eje', p.eje);
 p = perfilDe({
-  medias: { TransfTot: 4.5, TransTot: 3.0, Laissez: 2.0 },
+  medias: MEDIAS_CUALESQUIERA, pctCelid: TRANSF_ARRIBA,
   camin: { Cons: 70, Part: 70, Dir: 50 }, conlid: { Rel: 70, Tar: 50 },
 });
 ok(p.eje === 'Relacional', 'una de 20 sí', p.eje);
@@ -138,6 +160,7 @@ ok(gs.MARGEN_EJE === 15, 'el margen del eje sigue declarado en 15', String(gs.MA
 // ── La etiqueta mixta no inventa un estilo ──
 p = perfilDe({
   medias: { TransfTot: 4.5, TransTot: 4.4, Laissez: 2.0 },
+  pctCelid: { TransfTot: 90, TransTot: 90, Laissez: 25 },
   camin: { Cons: 90, Part: 90, Dir: 25 }, conlid: { Rel: 90, Tar: 25 },
 });
 ok(p.etiqueta === 'Líder Relacional, sin un estilo claramente predominante',
@@ -155,20 +178,32 @@ ok(p.menosDesarrollado.nombre === 'Directivo',
 
 // ── Las frases que van al informe ──
 p = perfilDe({ medias: { TransfTot: 4.47, TransTot: 3.45, Laissez: 3.0 },
-  pctCelid: { TransfTot: 75, TransTot: 50, Laissez: 75 } });
+  pctCelid: { TransfTot: 90, TransTot: 50, Laissez: 75 } });
 let frase = gs.frasePerfilCelid(p);
-ok(frase.indexOf('Transformacional predominante (4.47 / P75)') >= 0,
+ok(frase.indexOf('Transformacional predominante (4.47 / P90)') >= 0,
   'la frase de 2.2 nombra el predominante con su media y su percentil', frase);
-ok(frase.indexOf('Transaccional (3.45 / P50)') >= 0 && frase.indexOf('Laissez-Faire (3.00 / P75)') >= 0,
-  'y los otros dos en orden');
+ok(frase.indexOf('seguido por Laissez-Faire (3.00 / P75) y Transaccional (3.45 / P50)') >= 0,
+  'y los otros dos por percentil, no por media', frase);
 ok(!/zona de atención/.test(frase),
   'ya no afirma que el Laissez-Faire sea zona de atención sin mirarlo: en un perfil'
   + ' con Laissez-Faire bajo eso era falso');
 
-p = perfilDe({ medias: { TransfTot: 4.5, TransTot: 4.4, Laissez: 4.35 } });
+// Empate en el tope, con el tercero lejos: los valores reales de FM.
+p = perfilDe({ medias: { TransfTot: 4.47, TransTot: 3.45, Laissez: 3.0 },
+  pctCelid: { TransfTot: 75, TransTot: 50, Laissez: 75 } });
 frase = gs.frasePerfilCelid(p);
 ok(/no muestra un estilo de liderazgo claramente predominante/.test(frase),
   'con un perfil mixto la frase lo dice', frase);
+ok(frase.indexOf('Transformacional (4.47 / P75) y Laissez-Faire (3.00 / P75) comparten '
+  + 'el percentil más alto, por encima de Transaccional (3.45 / P50).') >= 0,
+  'nombra a los empatados como empatados y deja al tercero afuera: decir que los tres'
+  + ' "quedan en valores cercanos" sería falso', frase);
+
+// Empate de los tres.
+p = perfilDe({ medias: { TransfTot: 4.5, TransTot: 4.4, Laissez: 4.35 } });
+frase = gs.frasePerfilCelid(p);
+ok(/quedan en el mismo percentil\.$/.test(frase),
+  'con los tres empatados la frase no inventa un "por encima de"', frase);
 
 p = perfilDe({ medias: { TransfTot: 4.5 }, camin: { Cons: 90, Part: 90, Or: 90, Dir: 30 } });
 frase = gs.fraseSituacional(p, { Dir: 30, Cons: 90, Part: 90, Or: 90 });
@@ -458,9 +493,14 @@ ok(!/[Ff]ortaleza|[Bb]recha/.test(lineas.join(' ')),
 // Acertaba en dos de los tres, que es justamente el problema: no se sabía cuándo.
 const referencia = JSON.parse(fs.readFileSync(REFERENCIA, 'utf8'));
 const reales = referencia.filter((c) => /Planilla de Preguntas/.test(c.planilla));
+// FM y FM 1 cambiaron con la respuesta del PO del 2026-07-27: su Transformacional
+// (media 4,47) y su Laissez-Faire (media 3,00) caen los dos en P75, así que por
+// percentil empatan y no hay predominante. Con el criterio anterior, de medias,
+// daban "Líder Relacional-Transformacional". Es el efecto más visible del cambio y
+// está escrito acá para que se vea en el diff si alguien lo mueve otra vez.
 const esperadoReal = {
-  'Planilla de Preguntas - FM 1.xlsx': 'Líder Relacional-Transformacional',
-  'Planilla de Preguntas - FM.xlsx': 'Líder Relacional-Transformacional',
+  'Planilla de Preguntas - FM 1.xlsx': 'Líder Relacional, sin un estilo claramente predominante',
+  'Planilla de Preguntas - FM.xlsx': 'Líder Relacional, sin un estilo claramente predominante',
   'Planilla de Preguntas - SM.xlsx': 'Líder Transformacional',
 };
 reales.forEach((caso) => {

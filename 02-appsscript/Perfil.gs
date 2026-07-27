@@ -13,21 +13,35 @@
  * tres números, que el PO puede revisar y firmar una vez, mientras que una frase
  * redactada no se puede comprobar.
  *
- * DOS DECISIONES QUE EL PO TIENE QUE CONFIRMAR, y por eso están acá arriba y no
- * enterradas en el código:
+ * LA REGLA DE PREDOMINANCIA, RESPONDIDA POR EL PO EL 2026-07-27:
+ * "debe considerar el predominante el estilo con percentil más alto".
  *
- *   1. La predominancia se decide comparando las MEDIAS (escala 1 a 5), no los
- *      percentiles. "Predominante" es una lectura del propio perfil —cuál de los
- *      tres estilos ejerce más— y para eso sirve la media. El percentil contesta
- *      otra pregunta: en cuál se destaca más respecto de la población. El informe
- *      viejo imprimía los dos valores y afirmaba con el primero.
- *   2. Los márgenes de abajo son el mínimo para hablar de predominio. Sin margen,
- *      una diferencia de 0,02 se informaría como "predominante", que es precisión
- *      falsa. Los valores son un criterio razonable, NO una norma validada.
+ * Antes se decidía por la media (escala 1 a 5) con un margen mínimo de 0,30. El
+ * criterio nuevo es el percentil, y tiene un argumento a favor: las medias de los
+ * tres estilos no son comparables entre sí —cada escala tiene su propio baremo, y
+ * el del Laissez-Faire es mucho más bajo, así que una media de 3,00 en Laissez es
+ * P75 y una de 3,45 en Transaccional es P50—. El percentil es lo único que los
+ * pone en la misma referencia. La media se sigue imprimiendo al lado, porque el
+ * lector la necesita para entender la magnitud.
+ *
+ * DOS CONSECUENCIAS DEL CRITERIO NUEVO QUE EL PO TIENE QUE MIRAR:
+ *
+ *   1. EMPATES. Los baremos devuelven nueve percentiles y nada más (1, 5, 10, 25,
+ *      50, 75, 90, 95, 99), así que dos estilos empatan seguido: pasa en 2 de los 3
+ *      perfiles reales que hay de referencia y en el 25 % de los sintéticos. Acá un
+ *      empate en el tope se informa como perfil mixto —no hay forma de llamar
+ *      predominante a uno de dos que están en el mismo percentil— y eso es un
+ *      cambio visible: FM pasa de "Transformacional predominante" a "sin un estilo
+ *      claramente predominante", aunque su media Transformacional (4,47) esté muy
+ *      por encima de la del Laissez-Faire (3,00). Si el PO prefiere desempatar por
+ *      la media, es un `||` más en el orden y queda dicho en el comentario.
+ *   2. El Laissez-Faire predomina mucho más seguido que antes, por lo mismo: su
+ *      baremo es bajo. No es un error —un perfil de no-intervención existe y hay
+ *      que decirlo— pero la etiqueta resultante ("Líder Relacional-Laissez-Faire")
+ *      es la que más va a llamar la atención en los informes nuevos.
+ *
+ * El margen del eje (abajo) es un criterio razonable, NO una norma validada.
  */
-
-// Diferencia mínima entre medias (escala 1-5) para llamar a un estilo predominante.
-var MARGEN_PREDOMINANCIA = 0.30;
 
 // Diferencia mínima en puntos de percentil para decir que un eje pesa más que otro.
 var MARGEN_EJE = 15;
@@ -48,9 +62,9 @@ var ESTILOS_CAMIN = [
 /**
  * @param {Object} resultados salida de corregir()
  * @return {Object} {estilos, predominante, mixto, eje, etiqueta, menosDesarrollado}
- *   - estilos: los tres de CELID ordenados de mayor a menor media
- *   - predominante: el primero, o null si ninguno saca ventaja suficiente
- *   - mixto: true cuando los dos primeros están dentro del margen
+ *   - estilos: los tres de CELID ordenados de mayor a menor percentil
+ *   - predominante: el primero, o null si empata con otro en el percentil más alto
+ *   - mixto: true cuando dos o tres estilos comparten el percentil más alto
  *   - eje: 'Relacional' | 'Orientado a la Tarea' | 'Equilibrado'
  *   - etiqueta: cómo nombrar el perfil en el informe
  *   - menosDesarrollado: el estilo de CAMIN-A con el percentil más bajo
@@ -61,14 +75,15 @@ function clasificarPerfil(resultados) {
 
   var estilos = ESTILOS_CELID.map(function (e) {
     return { nombre: e.nombre, media: medias[e.clave], percentil: pctCelid[e.clave] };
-  }).sort(function (a, b) { return b.media - a.media; });
+  }).sort(function (a, b) {
+    // Manda el percentil. La media entra sólo para ordenar a los que empatan, así
+    // la enumeración de la frase sale siempre igual; no decide la predominancia.
+    return (b.percentil - a.percentil) || (b.media - a.media);
+  });
 
-  // La diferencia se redondea antes de comparar: en punto flotante 4.8 - 4.5 da
-  // 0.2999999999999998 y 4.5 - 4.2 da 0.30000000000000027, así que el mismo margen
-  // caería de un lado o del otro según los valores. Redondeado, la regla es
-  // determinista y se puede explicar.
-  var ventaja = Math.round((estilos[0].media - estilos[1].media) * 100) / 100;
-  var mixto = ventaja < MARGEN_PREDOMINANCIA;
+  // Un empate en el percentil más alto no se desempata: no hay forma de llamar
+  // predominante a uno de dos que están en el mismo lugar de la norma.
+  var mixto = estilos[0].percentil === estilos[1].percentil;
 
   // El eje se decide con percentiles: son de instrumentos distintos y sólo la
   // referencia normativa los hace comparables entre sí.
@@ -119,10 +134,17 @@ function promedio(valores) {
  */
 function frasePerfilCelid(perfil) {
   if (perfil.mixto) {
-    return 'La persona evaluada no muestra un estilo de liderazgo claramente '
-      + 'predominante: ' + conValores(perfil.estilos[0]) + ', '
-      + conValores(perfil.estilos[1]) + ' y ' + conValores(perfil.estilos[2])
-      + ' quedan en valores cercanos entre sí.';
+    // Se nombra a los empatados como empatados: decir "quedan en valores cercanos
+    // entre sí" sería falso cuando el tercero está muy abajo.
+    var tope = perfil.estilos[0].percentil;
+    var empatados = perfil.estilos.filter(function (e) { return e.percentil === tope; });
+    var resto = perfil.estilos.slice(empatados.length);
+    var frase = 'La persona evaluada no muestra un estilo de liderazgo claramente '
+      + 'predominante: ' + enumerar(empatados.map(conValores));
+    return resto.length
+      ? frase + ' comparten el percentil más alto, por encima de '
+        + enumerar(resto.map(conValores)) + '.'
+      : frase + ' quedan en el mismo percentil.';
   }
   return 'La persona evaluada muestra un perfil de liderazgo '
     + perfil.estilos[0].nombre + ' predominante ('
