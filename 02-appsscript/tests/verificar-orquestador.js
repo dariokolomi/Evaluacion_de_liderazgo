@@ -18,7 +18,7 @@ const RAIZ = path.resolve(__dirname, '..');
 const CELDAS = path.join(__dirname, 'celdas-python.json');
 
 const ARCHIVOS_GS = [
-  'Correccion.gs', 'Lectura.gs', 'Textos.gs', 'Documento.gs',
+  'Correccion.gs', 'Lectura.gs', 'Textos.gs', 'Perfil.gs', 'Documento.gs',
   'Radar.gs', 'Configuracion.gs', 'Acceso.gs', 'Historial.gs', 'Sintesis.gs',
   'Progreso.gs', 'Informe.gs',
 ];
