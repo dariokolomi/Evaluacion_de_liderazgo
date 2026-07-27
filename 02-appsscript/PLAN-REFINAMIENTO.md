@@ -289,14 +289,31 @@ aparecieron al cruzar el refinamiento con el código.
     son comparables entre sí —cada escala tiene su baremo, y el del Laissez-Faire es
     mucho más bajo— mientras que el percentil sí los pone en la misma referencia.
 
-    Queda abierta una sub-pregunta que la respuesta no cubre: **qué hacer con los
-    empates**. Como los baremos devuelven solo nueve percentiles, dos estilos empatan
-    seguido (2 de los 3 perfiles reales de referencia, 25 % de los sintéticos).
-    Implementado como perfil mixto —un empate no se desempata—, lo que cambia a FM y
-    FM 1 de "Líder Relacional-Transformacional" a "Líder Relacional, sin un estilo
-    claramente predominante", aunque su media Transformacional (4,47) esté muy por
-    encima de la del Laissez-Faire (3,00), que empata con ella en P75. Si el PO
-    prefiere desempatar por la media, es un criterio más en el orden.
+    **Los empates, respondidos el 2026-07-27:** *"debería generar un comentario del
+    tipo 'sin estilo predominante' e inferir en función de las dimensiones con
+    puntuaciones predominantes a cuáles estilos se asemeja más"*. O sea: el empate no
+    se desempata —el informe sigue diciendo que no hay predominante— y se agrega una
+    inferencia a partir de las dimensiones que puntúan más alto.
+
+    Implementado en `aproximacionPorDimensiones` (`Perfil.gs`). Gana el estilo dueño
+    de la dimensión con el percentil más alto; si el pico empata, decide cuántas
+    dimensiones destacadas (nivel Alto) tiene cada uno; si eso también empata, se
+    nombran los dos. Sin ninguna dimensión destacada no se infiere nada y el informe
+    lo dice.
+
+    **Por qué el pico y no el promedio de las dimensiones**, que fue lo primero que se
+    probó: promediar castiga al estilo con más facetas. El Transformacional se mide
+    con cuatro subescalas y el Laissez-Faire con una sola, así que el promedio arrastra
+    al primero hacia el medio y al segundo no lo mueve. Con los valores reales de FM
+    (Carisma P50, Estimulación P50, Inspiración P75, Consideración Individualizada P99,
+    contra Laissez-Faire P75) el promedio daba 69 contra 75 y el informe concluía "se
+    aproxima al Laissez-Faire" en un perfil cuya dimensión más alta es P99 y es
+    transformacional. Era un artefacto de la cuenta.
+
+    Resultado en los perfiles reales: FM y FM 1 quedan como *"Líder Relacional, sin un
+    estilo claramente predominante (más próximo al Transformacional)"*. Vuelven al
+    Transformacional, pero por otra vía y diciendo otra cosa: no que predomine, sino
+    que su dimensión más alta es transformacional.
 
     Efecto secundario a mirar: con percentiles, el Laissez-Faire predomina bastante más
     seguido que antes, por lo mismo —su baremo es bajo—, y la etiqueta resultante
