@@ -155,13 +155,17 @@ function construirInforme(body, datos) {
   var cam = r.camin.percentil, camv = r.camin.valor;
   var con = r.conlid.percentil, conv = r.conlid.valor;
   var nivel = nivelPorPercentil; // definido en Correccion.gs
+  // Estilo predominante, eje y estilo menos desarrollado. Se calcula una sola vez
+  // y lo comparten las secciones 2 y 3: si cada una lo decidiera por su cuenta
+  // podrían contradecirse, que es lo que HU2 señala. Ver Perfil.gs.
+  var perfil = clasificarPerfil(r);
 
   portada(body, datos.nombre, datos.fecha);
   seccionCuantitativa(body, neo, cel, celv, cam, camv, pot, potv, con, conv);
   body.appendPageBreak();
-  seccionCualitativa(body, neo, cel, celv, cam, pot, con, nivel);
+  seccionCualitativa(body, neo, cel, celv, cam, pot, con, nivel, perfil);
   body.appendPageBreak();
-  seccionPerfilIntegrado(body, neo, cel, cam, pot, con);
+  seccionPerfilIntegrado(body, neo, cel, cam, pot, con, perfil);
   body.appendPageBreak();
   seccionGrafico(body, datos.nombre, datos.imagenRadar, cel, cam, con);
   body.appendPageBreak();
@@ -288,7 +292,7 @@ function pintarNivelesDeFilas(tabla, filas) {
   });
 }
 
-function seccionCualitativa(body, neo, cel, celv, cam, pot, con, nivel) {
+function seccionCualitativa(body, neo, cel, celv, cam, pot, con, nivel, perfil) {
   parrafo(body, '2. Resultados Cualitativos', { negrita: true, centrado: true, tamano: 13 });
   parrafo(body, '2.1 NEO-FFI: interpretación tendencial conjugando los 5 factores de la personalidad registrados por el evaluado/a y cómo su perfil podría actuar en el desempeño laboral concreto.', { negrita: true });
 
@@ -301,7 +305,9 @@ function seccionCualitativa(body, neo, cel, celv, cam, pot, con, nivel) {
 
   var p2 = body.appendParagraph('');
   textoNegrita(p2, '2.2 Estilos de Liderazgo (CELID-A)', { tamano: 11 });
-  parrafo(body, 'La persona evaluada muestra un perfil de liderazgo Transformacional predominante (' + dec(celv.TransfTot) + ' / P' + cel.TransfTot + '), con Transaccional complementario (' + dec(celv.TransTot) + ' / P' + cel.TransTot + ') y Laissez-Faire (' + dec(celv.Laissez) + ' / P' + cel.Laissez + ') como zona de atención.');
+  // Calculado, no afirmado: antes decía "Transformacional predominante" en todos
+  // los informes. Ver Perfil.gs.
+  parrafo(body, frasePerfilCelid(perfil));
 
   var p3 = body.appendParagraph('');
   textoNegrita(p3, 'Liderazgo Transformacional : ');
@@ -339,13 +345,18 @@ function seccionCualitativa(body, neo, cel, celv, cam, pot, con, nivel) {
     : 'Distribución equilibrada entre los tres tipos de conductas de liderazgo.'));
 }
 
-function seccionPerfilIntegrado(body, neo, cel, cam, pot, con) {
+function seccionPerfilIntegrado(body, neo, cel, cam, pot, con, perfil) {
   parrafo(body, '3. Perfil Integrado y Análisis Situacional', { negrita: true, centrado: true, tamano: 13 });
-  parrafo(body, 'Integrando las cinco pruebas, el/la evaluado/a configura un perfil de Líder Relacional-Transformacional, con eje en la Consideración, la Participación y el Apoyo, sostenido por una base de extroversión ' + neo.nivel.E.toLowerCase() + ' (E T=' + neo.t.E + ') y motivación intrínseca genuina (P' + pot.Intr + '). Su estilo es altamente centrado en las personas: escucha, incluye, reconoce y apoya a sus colaboradores de manera consistente.');
+  // La etiqueta sale de la clasificación, no de una frase fija que decía
+  // "Líder Relacional-Transformacional" en todos los informes. Ver Perfil.gs.
+  parrafo(body, 'Integrando las cinco pruebas, el/la evaluado/a configura un perfil de '
+    + perfil.etiqueta + ', sostenido por una base de extroversión ' + neo.nivel.E.toLowerCase()
+    + ' (E T=' + neo.t.E + ') y motivación intrínseca ' + nivelPorPercentil(pot.Intr).toLowerCase()
+    + ' (P' + pot.Intr + ').');
   body.appendParagraph('');
   parrafo(body, 'El hallazgo más relevante del perfil es la combinación de un alto Liderazgo Considerado (P' + cam.Cons + ') y Participativo (P' + cam.Part + ') con una presencia de Laissez-Faire (P' + cel.Laissez + '). Esta tensión sugiere que el/la evaluado/a puede alternar entre un acompañamiento muy cercano y episodios de delegación sin el acompañamiento necesario, especialmente en conflictos o decisiones difíciles.');
   body.appendParagraph('');
-  parrafo(body, 'En términos del modelo Situacional (Hersey & Blanchard) y Camino-Meta (House), maneja con solvencia los estilos Considerado y Participativo, y tiene buena disposición hacia las Metas (P' + cam.Or + '). El estilo Directivo (P' + cam.Dir + ') es el menos desarrollado y el área de mayor crecimiento potencial.');
+  parrafo(body, fraseSituacional(perfil, cam));
   body.appendParagraph('');
 
   parrafo(body, 'Proyección hacia el Liderazgo Situacional — Competencias a desarrollar:', { negrita: true });
@@ -355,7 +366,13 @@ function seccionPerfilIntegrado(body, neo, cel, cam, pot, con) {
       'P' + cel.Laissez + ': tendencia a la no-intervención. Alta Amabilidad (T=' + neo.t.A + ') puede dificultar la confrontación.',
       'Definir criterios de cuándo intervenir vs. delegar. Formación en gestión del conflicto y toma de decisiones difíciles.'],
     ['2. Fortalecer el Liderazgo Directivo',
-      'P' + cam.Dir + ': el menos desarrollado del perfil. Necesario en situaciones de baja madurez o alta urgencia.',
+      // Se afirma que es el menos desarrollado sólo cuando lo es. Cuando lo es, la
+      // frase queda igual que la del informe original, así que la comparación
+      // contra Python sigue cubriendo esta celda.
+      'P' + cam.Dir + ': ' + (perfil.menosDesarrollado.nombre === 'Directivo'
+        ? 'el menos desarrollado del perfil'
+        : 'nivel ' + nivelPorPercentil(cam.Dir).toLowerCase())
+        + '. Necesario en situaciones de baja madurez o alta urgencia.',
       'Práctica de comunicación de expectativas claras. Role-play de conversaciones directivas. Feedback de corrección oportuno.'],
     ['3. Incrementar la Recompensa Contingente',
       'P' + cel.RecCont + ': nivel moderado. El buen desempeño puede no sentirse sistemáticamente reconocido.',

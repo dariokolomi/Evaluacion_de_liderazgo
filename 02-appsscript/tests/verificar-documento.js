@@ -19,11 +19,92 @@ const DOCUMENTO = path.join(__dirname, 'documento-python.json');
 
 const MAX_DIFERENCIAS = 12;
 
+/**
+ * Párrafos que ya NO deben coincidir con el informe de Python, a propósito.
+ *
+ * Python afirmaba estas tres cosas de forma fija, cualquiera fuera el resultado —el
+ * primer defecto que señala HU1—. Ahora se calculan, así que la comparación literal
+ * dejaría de tener sentido. En vez de saltearlos, cada uno se verifica contra la
+ * clasificación que produce Perfil.gs: el párrafo sigue revisado, sólo cambia
+ * contra qué. Así la comparación con Python se acota de forma deliberada y no se
+ * erosiona sin que nadie se dé cuenta.
+ *
+ * `desde` es el comienzo del párrafo TAL COMO LO ESCRIBÍA PYTHON.
+ */
+const DIVERGENCIAS = [
+  {
+    desde: 'La persona evaluada muestra un perfil de liderazgo',
+    porque: 'el estilo predominante se calcula; Python decía "Transformacional" siempre',
+    revisar: (texto, perfil) => (perfil.mixto
+      ? (/no muestra un estilo de liderazgo claramente predominante/.test(texto)
+        || 'debería decir que no hay un estilo predominante')
+      : (texto.indexOf(perfil.estilos[0].nombre + ' predominante') >= 0
+        || `debería nombrar a ${perfil.estilos[0].nombre} como predominante`)),
+  },
+  {
+    desde: 'Integrando las cinco pruebas',
+    porque: 'la etiqueta se calcula; Python decía "Líder Relacional-Transformacional" siempre',
+    revisar: (texto, perfil) => texto.indexOf(perfil.etiqueta) >= 0
+      || `debería contener la etiqueta calculada "${perfil.etiqueta}"`,
+  },
+  {
+    desde: 'En términos del modelo Situacional',
+    porque: 'el estilo menos desarrollado se calcula; Python decía "Directivo" siempre',
+    revisar: (texto, perfil) => texto.indexOf('El estilo ' + perfil.menosDesarrollado.nombre) >= 0
+      || `debería nombrar a ${perfil.menosDesarrollado.nombre} como el menos desarrollado`,
+  },
+];
+
+/**
+ * Lo mismo para una celda: el fundamento de la competencia 2 afirmaba "el menos
+ * desarrollado del perfil" con el Directivo en P75 o P10 de perfiles donde no lo
+ * era. Ahora eso se dice sólo cuando es cierto, y cuando lo es la frase queda
+ * idéntica a la de Python, así que la celda sigue comparándose en esos casos.
+ */
+const DIVERGENCIA_CELDA = {
+  coincide: (texto) => /^P\d+: el menos desarrollado del perfil\./.test(texto),
+  porque: 'el fundamento afirmaba "el menos desarrollado" sin verificarlo',
+  revisar: (texto, perfil) => (perfil.menosDesarrollado.nombre === 'Directivo'
+    ? (texto.indexOf('el menos desarrollado del perfil') >= 0
+      || 'el Directivo ES el menos desarrollado, la frase tendría que decirlo')
+    : (texto.indexOf('el menos desarrollado') < 0
+      || `el menos desarrollado es ${perfil.menosDesarrollado.nombre}, no debería atribuírselo al Directivo`)),
+};
+
+/**
+ * Neutraliza las celdas que divergen a propósito, después de verificarlas aparte.
+ * Devuelve los problemas encontrados; deja las dos celdas iguales para que la
+ * comparación profunda no las marque.
+ */
+function resolverCeldasDivergentes(esperado, obtenido, perfil) {
+  const problemas = [];
+  if (!esperado || esperado.tipo !== 'tabla' || !obtenido || obtenido.tipo !== 'tabla') return problemas;
+  esperado.filas.forEach((fila, f) => {
+    fila.forEach((celda, c) => {
+      if (!DIVERGENCIA_CELDA.coincide(celda.texto)) return;
+      const otra = obtenido.filas[f] && obtenido.filas[f][c];
+      if (!otra) return;
+      const veredicto = DIVERGENCIA_CELDA.revisar(otra.texto, perfil);
+      if (veredicto !== true) {
+        problemas.push(`celda[${f}][${c}] (${DIVERGENCIA_CELDA.porque}): ${veredicto}`);
+      }
+      celda.texto = otra.texto; // ya verificada: se saca de la comparación literal
+    });
+  });
+  return problemas;
+}
+
+function divergenciaDe(bloque) {
+  if (!bloque || bloque.tipo !== 'parrafo' || !bloque.tramos.length) return null;
+  const texto = bloque.tramos.map((t) => t.texto).join('');
+  return DIVERGENCIAS.find((d) => texto.indexOf(d.desde) === 0) || null;
+}
+
 function cargarGs() {
-  const fuente = ['Correccion.gs', 'Textos.gs', 'Documento.gs']
+  const fuente = ['Correccion.gs', 'Textos.gs', 'Perfil.gs', 'Documento.gs']
     .map((a) => fs.readFileSync(path.join(RAIZ, a), 'utf8'))
     .join('\n');
-  return new Function('DocumentApp', `${fuente}\nreturn { corregir, construirInforme, seccionGrafico, ANCHO_GRAFICO_PT };`)(DocumentApp);
+  return new Function('DocumentApp', `${fuente}\nreturn { corregir, construirInforme, seccionGrafico, ANCHO_GRAFICO_PT, clasificarPerfil };`)(DocumentApp);
 }
 
 /** La fecha y el tamaño natural del radar salen del informe de Python:
@@ -88,18 +169,20 @@ function main() {
     return 1;
   }
 
-  const { corregir, construirInforme } = cargarGs();
+  const { corregir, construirInforme, clasificarPerfil } = cargarGs();
   const informes = JSON.parse(fs.readFileSync(DOCUMENTO, 'utf8'));
 
   let fallados = 0;
   for (const informe of informes) {
     const respuestas = informe.respuestas;
     const { fecha, radar } = contextoDe(informe.bloques);
+    const resultados = corregir(respuestas);
+    const perfilDelCaso = clasificarPerfil(resultados);
     const body = new Body();
     construirInforme(body, {
       nombre: informe.nombre,
       fecha,
-      resultados: corregir(respuestas),
+      resultados,
       imagenRadar: radar,
     });
     const obtenido = normalizar(body.bloques);
@@ -114,6 +197,18 @@ function main() {
       // El radar ahora ocupa el ancho útil de la página, así que sus dimensiones
       // ya no coinciden con el PNG de Python a propósito: se verifica que haya
       // una imagen, no su tamaño.
+      const divergencia = divergenciaDe(esperado[i]);
+      if (divergencia) {
+        const obtenidoTexto = (obtenido[i] && obtenido[i].tramos || [])
+          .map((t) => t.texto).join('');
+        const veredicto = divergencia.revisar(obtenidoTexto, perfilDelCaso);
+        if (veredicto !== true) {
+          diferencias.push(`bloque[${i}] (${divergencia.porque}): ${veredicto}`);
+        }
+        continue;
+      }
+      const deCeldas = resolverCeldasDivergentes(esperado[i], obtenido[i], perfilDelCaso);
+      if (deCeldas.length) diferencias.push(...deCeldas);
       if (esperado[i] && esperado[i].tipo === 'imagen') {
         if (!obtenido[i] || obtenido[i].tipo !== 'imagen') {
           diferencias.push(`bloque[${i}]: se esperaba una imagen, js=${resumir(obtenido[i])}`);
