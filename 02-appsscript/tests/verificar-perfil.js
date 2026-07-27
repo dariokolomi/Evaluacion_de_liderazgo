@@ -103,6 +103,83 @@ p = perfilDe({
 ok(p.mixto === false && p.predominante.nombre === 'Transformacional',
   'un empate entre el segundo y el tercero no toca la predominancia del primero');
 
+// ── Sin predominante, a qué estilo se aproxima ──
+// Respuesta del PO del 2026-07-27: el informe dice que no hay predominante y
+// además infiere, por las dimensiones que más puntúan, a cuál se asemeja.
+//
+// Ojo al armar los casos: el percentil del estilo Laissez-Faire ES el de su única
+// escala, así que para empatar hay que mover TransfTot y Laissez juntos.
+const CELID_CHATO = {
+  Carisma: 50, EstimInt: 50, Inspir: 50, ConsInd: 50, RecCont: 50, DirExc: 50,
+  TransfTot: 75, TransTot: 25, Laissez: 75,
+};
+const conCelid = (pct) => perfilDe({
+  medias: { TransfTot: 4, TransTot: 4, Laissez: 4 },
+  pctCelid: Object.assign({}, CELID_CHATO, pct),
+});
+
+p = conCelid({ ConsInd: 90 });
+ok(p.aproximacion.estilos.length === 1 && p.aproximacion.estilos[0] === 'Transformacional',
+  'con el pico en una subescala transformacional, se aproxima al Transformacional',
+  JSON.stringify(p.aproximacion.estilos));
+ok(p.etiqueta === 'Líder Equilibrado, sin un estilo claramente predominante (más próximo al Transformacional)',
+  'y la etiqueta lo dice sin dejar de decir que no hay predominante', p.etiqueta);
+ok(/La dimensión que más puntúa es la Consideración Individualizada \(P90\), del Transformacional/
+  .test(gs.frasePerfilCelid(p)),
+  'la frase nombra la dimensión, su percentil y de qué estilo es', gs.frasePerfilCelid(p));
+
+// El artefacto que tuvo la primera versión de esta regla: promediar los
+// percentiles de las dimensiones castiga al estilo que tiene cuatro y no toca al
+// que tiene una. Con los valores reales de Chavo, el promedio daba 69 contra 75 y
+// concluía "se aproxima al Laissez-Faire" en un perfil cuyo pico es P99 y es
+// transformacional. Se mira el pico, no el promedio: este caso lo fija.
+p = conCelid({ Carisma: 50, EstimInt: 50, Inspir: 75, ConsInd: 99 });
+ok(p.aproximacion.estilos[0] === 'Transformacional',
+  'un pico alto pesa más que tres dimensiones medias: no se promedia',
+  JSON.stringify(p.aproximacion));
+
+p = conCelid({});
+ok(p.aproximacion.estilos.length === 1 && p.aproximacion.estilos[0] === 'Laissez-Faire',
+  'si la única escala destacada es la del Laissez-Faire, se aproxima ahí',
+  JSON.stringify(p.aproximacion.estilos));
+ok(/Es una lectura de no-intervención/.test(gs.frasePerfilCelid(p)),
+  'y la frase aclara que no es una fortaleza, o se lee como un estilo más');
+ok(!/del Laissez-Faire, del Laissez-Faire|el Laissez-Faire \(P75\), del Laissez-Faire/
+  .test(gs.frasePerfilCelid(p)),
+  'sin repetir el nombre: su dimensión y su estilo son la misma escala',
+  gs.frasePerfilCelid(p));
+
+p = conCelid({ TransfTot: 90, Laissez: 90, ConsInd: 90 });
+ok(p.aproximacion.estilos.length === 2,
+  'con los picos empatados no se elige uno', JSON.stringify(p.aproximacion.estilos));
+ok(p.etiqueta === 'Líder Equilibrado, sin un estilo claramente predominante (entre el Transformacional y el Laissez-Faire)',
+  'y la etiqueta nombra a los dos', p.etiqueta);
+
+p = conCelid({ TransfTot: 90, Laissez: 90, ConsInd: 90, Inspir: 90 });
+ok(p.aproximacion.estilos.length === 1 && p.aproximacion.estilos[0] === 'Transformacional',
+  'empatado el pico, desempata cuántas dimensiones destacadas tiene cada uno',
+  JSON.stringify(p.aproximacion.estilos));
+
+// Sin ninguna dimensión por encima del corte no hay a qué aproximarlo. Es un
+// resultado, no una falla: el informe lo dice en vez de inclinarse igual.
+p = conCelid({ TransfTot: 50, Laissez: 50 });
+ok(p.mixto === true && p.aproximacion.estilos.length === 0,
+  'sin dimensiones destacadas no se infiere ninguna aproximación',
+  JSON.stringify(p.aproximacion));
+ok(p.etiqueta === 'Líder Equilibrado, sin un estilo claramente predominante',
+  'y la etiqueta no queda con un paréntesis vacío', p.etiqueta);
+ok(/Ninguna de las dimensiones que los componen se destaca/.test(gs.frasePerfilCelid(p)),
+  'la frase lo dice en vez de callarlo', gs.frasePerfilCelid(p));
+
+// Con predominante la pregunta no aplica y la frase no cambia.
+p = perfilDe({
+  medias: { TransfTot: 4.5, TransTot: 3, Laissez: 2 },
+  pctCelid: { TransfTot: 90, TransTot: 50, Laissez: 25 },
+});
+ok(p.aproximacion === null, 'con un estilo predominante no se calcula aproximación');
+ok(!/se aproxima/.test(gs.frasePerfilCelid(p)),
+  'y la frase del 2.2 no habla de aproximaciones', gs.frasePerfilCelid(p));
+
 // ── Laissez-Faire también puede predominar ──
 // No es una fortaleza, pero si es donde más se destaca, el informe tiene que decirlo.
 p = perfilDe({
@@ -202,7 +279,7 @@ ok(frase.indexOf('Transformacional (4.47 / P75) y Laissez-Faire (3.00 / P75) com
 // Empate de los tres.
 p = perfilDe({ medias: { TransfTot: 4.5, TransTot: 4.4, Laissez: 4.35 } });
 frase = gs.frasePerfilCelid(p);
-ok(/quedan en el mismo percentil\.$/.test(frase),
+ok(/quedan en el mismo percentil\./.test(frase) && !/por encima de/.test(frase),
   'con los tres empatados la frase no inventa un "por encima de"', frase);
 
 p = perfilDe({ medias: { TransfTot: 4.5 }, camin: { Cons: 90, Part: 90, Or: 90, Dir: 30 } });
@@ -493,14 +570,17 @@ ok(!/[Ff]ortaleza|[Bb]recha/.test(lineas.join(' ')),
 // Acertaba en dos de los tres, que es justamente el problema: no se sabía cuándo.
 const referencia = JSON.parse(fs.readFileSync(REFERENCIA, 'utf8'));
 const reales = referencia.filter((c) => /Planilla de Preguntas/.test(c.planilla));
-// Chavo y Chavo 1 cambiaron con la respuesta del PO del 2026-07-27: su Transformacional
+// Chavo y Chavo 1 cambiaron con las respuestas del PO del 2026-07-27. Su Transformacional
 // (media 4,47) y su Laissez-Faire (media 3,00) caen los dos en P75, así que por
-// percentil empatan y no hay predominante. Con el criterio anterior, de medias,
-// daban "Líder Relacional-Transformacional". Es el efecto más visible del cambio y
-// está escrito acá para que se vea en el diff si alguien lo mueve otra vez.
+// percentil empatan y no hay predominante; con el criterio anterior, de medias,
+// daban "Líder Relacional-Transformacional". La aproximación que pidió después el
+// PO los devuelve al Transformacional, pero por otra vía y diciéndolo de otro modo:
+// no que predomine, sino que su dimensión más alta (Consideración Individualizada,
+// P99) es transformacional. Está escrito acá para que se vea en el diff si alguien
+// lo mueve otra vez.
 const esperadoReal = {
-  'Planilla de Preguntas - Chavo 1.xlsx': 'Líder Relacional, sin un estilo claramente predominante',
-  'Planilla de Preguntas - Chavo.xlsx': 'Líder Relacional, sin un estilo claramente predominante',
+  'Planilla de Preguntas - Chavo 1.xlsx': 'Líder Relacional, sin un estilo claramente predominante (más próximo al Transformacional)',
+  'Planilla de Preguntas - Chavo.xlsx': 'Líder Relacional, sin un estilo claramente predominante (más próximo al Transformacional)',
   'Planilla de Preguntas - Quico.xlsx': 'Líder Transformacional',
 };
 reales.forEach((caso) => {

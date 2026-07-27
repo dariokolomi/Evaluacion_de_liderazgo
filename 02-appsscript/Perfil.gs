@@ -28,13 +28,11 @@
  *
  *   1. EMPATES. Los baremos devuelven nueve percentiles y nada más (1, 5, 10, 25,
  *      50, 75, 90, 95, 99), así que dos estilos empatan seguido: pasa en 2 de los 3
- *      perfiles reales que hay de referencia y en el 25 % de los sintéticos. Acá un
+ *      perfiles reales que hay de referencia y en el 25 % de los sintéticos. Un
  *      empate en el tope se informa como perfil mixto —no hay forma de llamar
- *      predominante a uno de dos que están en el mismo percentil— y eso es un
- *      cambio visible: Chavo pasa de "Transformacional predominante" a "sin un estilo
- *      claramente predominante", aunque su media Transformacional (4,47) esté muy
- *      por encima de la del Laissez-Faire (3,00). Si el PO prefiere desempatar por
- *      la media, es un `||` más en el orden y queda dicho en el comentario.
+ *      predominante a uno de dos que están en el mismo percentil— y el PO confirmó
+ *      el 2026-07-27 que así lo quiere, más una inferencia sobre a qué estilo se
+ *      aproxima. Ver `aproximacionPorDimensiones`.
  *   2. El Laissez-Faire predomina mucho más seguido que antes, por lo mismo: su
  *      baremo es bajo. No es un error —un perfil de no-intervención existe y hay
  *      que decirlo— pero la etiqueta resultante ("Líder Relacional-Laissez-Faire")
@@ -82,8 +80,12 @@ function clasificarPerfil(resultados) {
   });
 
   // Un empate en el percentil más alto no se desempata: no hay forma de llamar
-  // predominante a uno de dos que están en el mismo lugar de la norma.
+  // predominante a uno de dos que están en el mismo lugar de la norma. Lo que sí
+  // se hace, desde la respuesta del PO del 2026-07-27, es mirar las dimensiones
+  // que los componen para decir a cuál se aproxima. Ver aproximacionPorDimensiones.
   var mixto = estilos[0].percentil === estilos[1].percentil;
+  var empatados = estilos.filter(function (e) { return e.percentil === estilos[0].percentil; });
+  var aproximacion = mixto ? aproximacionPorDimensiones(empatados, pctCelid) : null;
 
   // El eje se decide con percentiles: son de instrumentos distintos y sólo la
   // referencia normativa los hace comparables entre sí.
@@ -103,8 +105,9 @@ function clasificarPerfil(resultados) {
     estilos: estilos,
     predominante: mixto ? null : estilos[0],
     mixto: mixto,
+    aproximacion: aproximacion,
     eje: eje,
-    etiqueta: etiquetaDePerfil(eje, mixto ? null : estilos[0]),
+    etiqueta: etiquetaDePerfil(eje, mixto ? null : estilos[0], aproximacion),
     menosDesarrollado: menos,
     ejeRelacional: relacional,
     ejeTarea: tarea
@@ -112,12 +115,120 @@ function clasificarPerfil(resultados) {
 }
 
 /**
- * Cómo se nombra el perfil en el informe.
- * Sin estilo predominante no se inventa uno: se dice que es mixto, que es la
- * lectura honesta cuando los tres valores están cerca.
+ * Las dimensiones que componen cada estilo de CELID-A.
+ *
+ * No es una equivalencia inventada: el total de cada estilo se calcula con estos
+ * mismos ítems (ver CELID_ITEMS y CELID_TRANSFORMACIONAL en Correccion.gs). El
+ * Laissez-Faire no tiene subescalas —es una escala sola— y por eso figura con su
+ * propio valor, para que los tres se puedan comparar de la misma forma.
  */
-function etiquetaDePerfil(eje, predominante) {
-  if (!predominante) return 'Líder ' + eje + ', sin un estilo claramente predominante';
+var DIMENSIONES_POR_ESTILO = {
+  'Transformacional': [
+    { clave: 'Carisma', nombre: 'Carisma', articulo: 'el' },
+    { clave: 'EstimInt', nombre: 'Estimulación Intelectual', articulo: 'la' },
+    { clave: 'Inspir', nombre: 'Inspiración', articulo: 'la' },
+    { clave: 'ConsInd', nombre: 'Consideración Individualizada', articulo: 'la' }
+  ],
+  'Transaccional': [
+    { clave: 'RecCont', nombre: 'Recompensa Contingente', articulo: 'la' },
+    { clave: 'DirExc', nombre: 'Dirección por Excepción', articulo: 'la' }
+  ],
+  'Laissez-Faire': [
+    { clave: 'Laissez', nombre: 'Laissez-Faire', articulo: 'el' }
+  ]
+};
+
+/**
+ * A qué estilo se aproxima un perfil que no tiene predominante.
+ *
+ * Respuesta del PO del 2026-07-27: cuando dos estilos empatan, el informe tiene
+ * que decir que no hay predominante —eso ya lo hacía— y además inferir a cuál se
+ * asemeja más "en función de las dimensiones con puntuaciones predominantes".
+ *
+ * LA REGLA: gana el estilo dueño de la dimensión que puntúa más alto. Si el pico
+ * empata, decide cuántas dimensiones destacadas tiene cada uno; si eso también
+ * empata, se nombran los dos.
+ *
+ * POR QUÉ NO EL PROMEDIO DE SUS DIMENSIONES, que era lo primero que probé: el
+ * promedio castiga al estilo que tiene más facetas. El Transformacional se mide
+ * con cuatro subescalas y el Laissez-Faire con una sola, así que promediar arrastra
+ * al primero hacia el medio y al segundo no lo mueve —su promedio es su propio
+ * total—. Con los valores reales de Chavo (Carisma P50, Estimulación P50, Inspiración
+ * P75, Consideración Individualizada P99, contra Laissez-Faire P75) el promedio da
+ * 69 contra 75 y el informe concluía "se aproxima al Laissez-Faire" en un perfil
+ * cuya dimensión más alta es P99 y es transformacional. Es un artefacto de la
+ * cuenta, no una lectura del perfil.
+ *
+ * "Destacada" es nivel Alto, el mismo corte que usa el resto del informe: no se
+ * introduce un umbral nuevo para esta frase.
+ *
+ * SÓLO SE COMPARAN LOS ESTILOS EMPATADOS, no los tres. Si se compararan los tres,
+ * la frase podría terminar diciendo que el perfil se aproxima a un estilo que
+ * quedó por debajo en el total, justo después de haber dicho cuáles empataron
+ * arriba. Serían dos afirmaciones que se contradicen en el mismo párrafo.
+ *
+ * @return {Object|null} {estilos, destacadas} — `estilos` vacío cuando ninguna
+ *   dimensión llega a destacarse, que es un resultado y no una falla.
+ */
+function aproximacionPorDimensiones(estilosEmpatados, percentilesCelid) {
+  if (!estilosEmpatados || estilosEmpatados.length < 2) return null;
+
+  var destacadas = [];
+  estilosEmpatados.forEach(function (estilo) {
+    (DIMENSIONES_POR_ESTILO[estilo.nombre] || []).forEach(function (d) {
+      var percentil = percentilesCelid[d.clave];
+      if (nivelPorPercentil(percentil) === 'Alto') {
+        destacadas.push({
+          nombre: d.nombre, articulo: d.articulo, percentil: percentil, estilo: estilo.nombre
+        });
+      }
+    });
+  });
+  destacadas.sort(function (a, b) { return b.percentil - a.percentil; });
+
+  // Ninguna dimensión se destaca: no hay con qué inclinar la lectura y el informe
+  // lo dice. Inventar una inclinación acá sería exactamente lo que se le corrigió
+  // al informe viejo.
+  if (!destacadas.length) return { estilos: [], destacadas: [] };
+
+  var pico = destacadas[0].percentil;
+  var conElPico = {};
+  destacadas.forEach(function (d) {
+    if (d.percentil === pico) conElPico[d.estilo] = true;
+  });
+  var candidatos = Object.keys(conElPico);
+
+  // Empate en el pico: decide cuántas destacadas tiene cada uno.
+  if (candidatos.length > 1) {
+    var cuantas = {};
+    candidatos.forEach(function (nombre) {
+      cuantas[nombre] = destacadas.filter(function (d) { return d.estilo === nombre; }).length;
+    });
+    var maximo = Math.max.apply(null, candidatos.map(function (n) { return cuantas[n]; }));
+    candidatos = candidatos.filter(function (n) { return cuantas[n] === maximo; });
+  }
+
+  return {
+    estilos: candidatos,
+    destacadas: destacadas.filter(function (d) { return candidatos.indexOf(d.estilo) >= 0; })
+  };
+}
+
+/**
+ * Cómo se nombra el perfil en el informe.
+ * Sin estilo predominante no se inventa uno: se dice que es mixto y se agrega a
+ * cuál se aproxima, que es la lectura que pidió el PO.
+ */
+function etiquetaDePerfil(eje, predominante, aproximacion) {
+  if (!predominante) {
+    var base = 'Líder ' + eje + ', sin un estilo claramente predominante';
+    // Sin ninguna dimensión destacada no hay a qué aproximarlo, y la etiqueta se
+    // queda como está: el paréntesis vacío sería peor que no decir nada.
+    if (!aproximacion || !aproximacion.estilos.length) return base;
+    return base + (aproximacion.estilos.length === 1
+      ? ' (más próximo al ' + aproximacion.estilos[0] + ')'
+      : ' (entre el ' + aproximacion.estilos.join(' y el ') + ')');
+  }
   if (eje === 'Equilibrado') return 'Líder ' + predominante.nombre;
   return 'Líder ' + eje + '-' + predominante.nombre;
 }
@@ -141,16 +252,68 @@ function frasePerfilCelid(perfil) {
     var resto = perfil.estilos.slice(empatados.length);
     var frase = 'La persona evaluada no muestra un estilo de liderazgo claramente '
       + 'predominante: ' + enumerar(empatados.map(conValores));
-    return resto.length
-      ? frase + ' comparten el percentil más alto, por encima de '
+    frase += resto.length
+      ? ' comparten el percentil más alto, por encima de '
         + enumerar(resto.map(conValores)) + '.'
-      : frase + ' quedan en el mismo percentil.';
+      : ' quedan en el mismo percentil.';
+    return frase + fraseAproximacion(perfil.aproximacion);
   }
   return 'La persona evaluada muestra un perfil de liderazgo '
     + perfil.estilos[0].nombre + ' predominante ('
     + perfil.estilos[0].media.toFixed(2) + ' / P' + perfil.estilos[0].percentil
     + '), seguido por ' + conValores(perfil.estilos[1])
     + ' y ' + conValores(perfil.estilos[2]) + '.';
+}
+
+/**
+ * La segunda oración del 2.2 cuando no hay predominante: a cuál se aproxima y
+ * con qué dimensiones. Va con los números al lado porque es una inferencia, no
+ * una medición: quien lea el informe tiene que poder no estar de acuerdo.
+ *
+ * Devuelve '' cuando hay predominante, así la frase de arriba no cambia.
+ */
+function fraseAproximacion(aproximacion) {
+  if (!aproximacion) return '';
+
+  if (!aproximacion.estilos.length) {
+    return ' Ninguna de las dimensiones que los componen se destaca lo suficiente'
+      + ' como para inclinar la lectura hacia uno u otro.';
+  }
+
+  if (aproximacion.estilos.length > 1) {
+    return ' Las dimensiones más altas se reparten entre el '
+      + aproximacion.estilos.join(' y el ')
+      + ', así que el perfil no se aproxima más a uno que a otro.';
+  }
+
+  // La regla mira el pico, así que la frase nombra el pico: si dijera "las
+  // dimensiones que más se destacan" estaría hablando de todas las altas, y
+  // podría haber una alta del otro estilo empatado que la frase no menciona.
+  var pico = aproximacion.destacadas[0];
+  // El Laissez-Faire es una escala sola: su dimensión y su estilo son la misma
+  // cosa, y decir "el Laissez-Faire, del Laissez-Faire" es una frase rota.
+  var frase = pico.nombre === aproximacion.estilos[0]
+    ? ' La escala que más puntúa es ' + pico.articulo + ' ' + pico.nombre
+      + ' (P' + pico.percentil + '), así que el perfil se aproxima a ese estilo.'
+    : ' La dimensión que más puntúa es ' + pico.articulo + ' ' + pico.nombre
+      + ' (P' + pico.percentil + '), del ' + aproximacion.estilos[0]
+      + ', así que el perfil se aproxima a ese estilo.';
+
+  var otras = aproximacion.destacadas.slice(1);
+  if (otras.length) {
+    frase += ' También se destaca' + (otras.length > 1 ? 'n ' : ' ')
+      + enumerar(otras.map(function (d) {
+        return d.articulo + ' ' + d.nombre + ' (P' + d.percentil + ')';
+      })) + '.';
+  }
+
+  // El Laissez-Faire no es una fortaleza: si la aproximación cae de ese lado, la
+  // frase tiene que decir qué significa, o se lee como un estilo más de la lista.
+  if (aproximacion.estilos[0] === 'Laissez-Faire') {
+    frase += ' Es una lectura de no-intervención —dejar hacer— y no una fortaleza'
+      + ' del ejercicio del rol.';
+  }
+  return frase;
 }
 
 /**
