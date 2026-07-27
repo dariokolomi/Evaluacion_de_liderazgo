@@ -242,6 +242,23 @@ aparecieron al cruzar el refinamiento con el código.
    Desarrollo, Brecha Alta/Media/Baja y Riesgo, expresados en percentil o en T.
    Sub-pregunta concreta: HU1 dice `Percentil > 75`; el código usa `>= 75`
    (`Correccion.gs:81`). ¿P75 exacto es o no es Fortaleza Consolidada?
+
+   **Respondido en parte el 2026-07-27:** el corte entre Medio y Bajo es
+   *"medio = > P25 y bajo <= P25"*. Aplicado en `nivelPorPercentil()`; como esa función
+   es la única fuente del rótulo, el cambio bajó a las tablas de las secciones 1 a 4,
+   al reparto del 2.2 y a la síntesis del punto 5 a la vez, sin dejar dos secciones
+   diciendo cosas distintas del mismo valor.
+
+   Consecuencia que conviene que el PO tenga presente: los baremos devuelven **nueve
+   percentiles y nada más** (1, 5, 10, 25, 50, 75, 90, 95, 99), así que P25 no es un
+   borde sino una categoría entera. Con el corte nuevo, **Bajo = {1, 5, 10, 25}**,
+   **Medio = {50}** y **Alto = {75, 90, 95, 99}**: "Medio" queda reservado para el
+   percentil 50 exacto. Es más simétrico que antes —P25 abajo espeja a P75 arriba—
+   pero angosta la banda del medio a un solo valor.
+
+   Sigue sin responder el corte de arriba (`>= 75` vs. `> 75`) y los umbrales del
+   punto 5, que son otro vocabulario: fortaleza `>= P75` y brecha `< P50` en
+   `Perfil.gs:363-370`.
 4. **Reglas de cruce diagnóstico** además del ejemplo. Y la aclaración del ejemplo:
    ¿"Liderazgo Considerado" es *Consideración Individualizada* de CELID-A o *Liderazgo
    Considerado (Apoyo)* de CAMIN-A? Son escalas distintas de instrumentos distintos.
@@ -265,7 +282,6 @@ aparecieron al cruzar el refinamiento con el código.
 9. **Visibilidad del dato de origen** (P2 del PO). ¿El informe que recibe el líder muestra
    el valor numérico que originó cada interpretación, o eso queda solo en la trazabilidad
    interna? Cambia el render, no el motor.
-
 ---
 
 ## 5. Lo que se puede hacer sin esperar respuestas
