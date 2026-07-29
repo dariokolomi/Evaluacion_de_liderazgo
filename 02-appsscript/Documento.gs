@@ -136,6 +136,22 @@ function pct(p) {
   return p >= 95 ? 'P' + p + '+' : 'P' + p;
 }
 
+/**
+ * Cómo se nombra un nivel en el punto 5: con la palabra, nunca con el puntaje.
+ *
+ * El PO pidió que la síntesis de devolución no mencione valores. La síntesis del
+ * LLM ya lo cumple —`validarContenido` rechaza cualquier "P75" o "T=64"—, pero la
+ * determinista, que es la que sale cuando el LLM falla, seguía imprimiéndolos: de
+ * ahí salieron los "(P75)" que el PO vio en un informe real. La regla tiene que
+ * valer en los dos caminos, porque quien lee el informe no sabe cuál se usó.
+ *
+ * Los puntajes siguen estando en las secciones 1 a 4, que son las que sostienen la
+ * trazabilidad. El punto 5 es la devolución.
+ */
+function nivelEntreParentesis(p) {
+  return '(nivel ' + nivelPorPercentil(p).toLowerCase() + ')';
+}
+
 function dec(valor) {
   return valor.toFixed(2);
 }
@@ -420,9 +436,37 @@ function seccionSintesis(body, neo, cel, cam, pot, con, sintesis) {
 
   if (sintesis) {
     sintesisNarrativa(body, sintesis);
-    return;
+  } else {
+    sintesisDeterminista(body, neo, cel, cam, pot, con);
   }
-  sintesisDeterminista(body, neo, cel, cam, pot, con);
+  // La nota va acá y no adentro de cada variante para que no haya forma de que un
+  // camino la emita y el otro no: quien lee el informe tiene que poder saber
+  // siempre qué lo escribió.
+  notaDeAutoria(body, sintesis);
+}
+
+/**
+ * Quién escribió el punto 5.
+ *
+ * El informe se archiva en un legajo y se usa en una devolución. Quien lo lee
+ * después no tiene cómo saber cuál de los dos caminos salió —el modelo redacta
+ * con una estructura y el texto fijo con otra, pero eso hay que conocerlo—, y la
+ * diferencia importa: una síntesis asistida por IA se revisa distinto que un
+ * texto armado con reglas, y si hubo dos modelos posibles, cuál de los dos la
+ * escribió cambia qué tan probada está esa redacción.
+ *
+ * Antes la nota salía sólo cuando había modelo, así que el texto determinista era
+ * justamente el que no se declaraba: el informe más pobre era el que menos decía
+ * de sí mismo.
+ */
+function notaDeAutoria(body, sintesis) {
+  body.appendParagraph('');
+  // Sin el prefijo del proveedor ("nvidia/…"): el nombre del modelo alcanza.
+  var quien = sintesis && sintesis.modelo
+    ? 'Síntesis asistida por IA ' + nombreDeModelo(sintesis.modelo)
+    : 'Síntesis generada con el texto determinista del sistema, sin asistencia de IA';
+  parrafo(body, quien + ' - Requiere revisión profesional antes de la devolución.',
+    { cursiva: true, tamano: 8 });
 }
 
 /** Estructura de `Informe-MA.docx`: resumen, fortalezas, áreas, inferencias,
@@ -464,16 +508,7 @@ function sintesisNarrativa(body, s) {
 
   parrafo(body, 'Información estratégica — Pendiente de Definir', { negrita: true, tamano: 11 });
   vinetasConTitulo(body, s.pendienteDefinir);
-
-  if (s.modelo) {
-    body.appendParagraph('');
-    // Sin el prefijo del proveedor ("nvidia/…"): el nombre del modelo alcanza, y
-    // decía "sobre los percentiles y puntajes T", que era justo lo que el PO pidió
-    // que este punto no mencione.
-    parrafo(body, 'Síntesis asistida por IA ' + nombreDeModelo(s.modelo)
-      + ' - Requiere revisión profesional antes de la devolución.',
-      { cursiva: true, tamano: 8 });
-  }
+  // La nota de autoría la pone `seccionSintesis`, común a los dos caminos.
 }
 
 /** "nvidia/llama-3.3-nemotron-super-49b-v1.5" → "llama-3.3-nemotron-super-49b-v1.5" */
@@ -495,16 +530,18 @@ function vinetasConTitulo(body, items) {
 function sintesisDeterminista(body, neo, cel, cam, pot, con) {
   parrafo(body, 'Principales Fortalezas', { negrita: true, tamano: 11 });
   var fortalezas = [];
-  if (esFortalezaConsolidada(cel.ConsInd)) fortalezas.push('Consideración Individualizada (P' + cel.ConsInd + '): atiende activamente el desarrollo y las necesidades de cada colaborador/a, construyendo vínculos de confianza sólidos.');
-  if (esFortalezaConsolidada(cam.Cons)) fortalezas.push('Liderazgo Considerado (P' + cam.Cons + '): genera un ambiente de bienestar, contención y apoyo que favorece la retención y el compromiso del equipo.');
-  if (esFortalezaConsolidada(cam.Part)) fortalezas.push('Liderazgo Participativo (P' + cam.Part + '): involucra y consulta activamente al equipo en las decisiones, generando sentido de pertenencia y apropiación de los objetivos.');
-  if (esFortalezaConsolidada(cam.Or)) fortalezas.push('Orientación a Metas (P' + cam.Or + '): establece objetivos exigentes y alienta el rendimiento superior combinando desafío con apoyo.');
-  if (esFortalezaConsolidada(con.Rel)) fortalezas.push('Conductas de Relaciones (P' + con.Rel + '): reconocimiento de logros, apoyo cercano e información fluida al equipo como herramientas cotidianas de gestión.');
-  if (esFortalezaConsolidada(con.Camb)) fortalezas.push('Conductas Orientadas al Cambio (P' + con.Camb + '): genera alianzas, promueve nuevas estrategias y forma equipos orientados a la transformación.');
-  if (esFortalezaConsolidada(cel.TransfTot)) fortalezas.push('Liderazgo Transformacional (P' + cel.TransfTot + '): inspira y motiva al equipo hacia metas compartidas, trascendiendo el intercambio puramente transaccional.');
-  if (esFortalezaConsolidada(pot.Intr)) fortalezas.push('Motivación Intrínseca (P' + pot.Intr + '): ejerce el liderazgo por convicción y disfrute genuino del rol, lo que se traduce en consistencia y autenticidad.');
-  if (neo.nivel.E === 'Alto' || neo.nivel.E === 'Muy Alto') fortalezas.push('Extraversión (' + neo.nivel.E + ', T=' + neo.t.E + '): sociabilidad y energía natural para construir vínculos de confianza y mantener al equipo conectado.');
-  if (neo.nivel.N === 'Bajo' || neo.nivel.N === 'Muy Bajo') fortalezas.push('Estabilidad Emocional (' + neo.nivel.N + ', T=' + neo.t.N + '): manejo sólido del estrés y la presión del rol, recurso fundamental para el liderazgo sostenido.');
+  if (esFortalezaConsolidada(cel.ConsInd)) fortalezas.push('Consideración Individualizada ' + nivelEntreParentesis(cel.ConsInd) + ': atiende activamente el desarrollo y las necesidades de cada colaborador/a, construyendo vínculos de confianza sólidos.');
+  if (esFortalezaConsolidada(cam.Cons)) fortalezas.push('Liderazgo Considerado ' + nivelEntreParentesis(cam.Cons) + ': genera un ambiente de bienestar, contención y apoyo que favorece la retención y el compromiso del equipo.');
+  if (esFortalezaConsolidada(cam.Part)) fortalezas.push('Liderazgo Participativo ' + nivelEntreParentesis(cam.Part) + ': involucra y consulta activamente al equipo en las decisiones, generando sentido de pertenencia y apropiación de los objetivos.');
+  if (esFortalezaConsolidada(cam.Or)) fortalezas.push('Orientación a Metas ' + nivelEntreParentesis(cam.Or) + ': establece objetivos exigentes y alienta el rendimiento superior combinando desafío con apoyo.');
+  if (esFortalezaConsolidada(con.Rel)) fortalezas.push('Conductas de Relaciones ' + nivelEntreParentesis(con.Rel) + ': reconocimiento de logros, apoyo cercano e información fluida al equipo como herramientas cotidianas de gestión.');
+  if (esFortalezaConsolidada(con.Camb)) fortalezas.push('Conductas Orientadas al Cambio ' + nivelEntreParentesis(con.Camb) + ': genera alianzas, promueve nuevas estrategias y forma equipos orientados a la transformación.');
+  if (esFortalezaConsolidada(cel.TransfTot)) fortalezas.push('Liderazgo Transformacional ' + nivelEntreParentesis(cel.TransfTot) + ': inspira y motiva al equipo hacia metas compartidas, trascendiendo el intercambio puramente transaccional.');
+  if (esFortalezaConsolidada(pot.Intr)) fortalezas.push('Motivación Intrínseca ' + nivelEntreParentesis(pot.Intr) + ': ejerce el liderazgo por convicción y disfrute genuino del rol, lo que se traduce en consistencia y autenticidad.');
+  // El NEO no tiene percentil acá: su nivel ya viene en palabras, así que se usa
+  // ese mismo. Lo que se va es el "T=64", que es el puntaje.
+  if (neo.nivel.E === 'Alto' || neo.nivel.E === 'Muy Alto') fortalezas.push('Extraversión (nivel ' + neo.nivel.E.toLowerCase() + '): sociabilidad y energía natural para construir vínculos de confianza y mantener al equipo conectado.');
+  if (neo.nivel.N === 'Bajo' || neo.nivel.N === 'Muy Bajo') fortalezas.push('Estabilidad Emocional (neuroticismo en nivel ' + neo.nivel.N.toLowerCase() + '): manejo sólido del estrés y la presión del rol, recurso fundamental para el liderazgo sostenido.');
   if (!fortalezas.length) fortalezas.push('Ver análisis detallado en secciones anteriores.');
   vinetas(body, fortalezas);
 
@@ -515,13 +552,16 @@ function sintesisDeterminista(body, neo, cel, cam, pot, con) {
   // tenía su propia copia y sólo una de las dos miraba el dato.
   var b = brechasDeDesarrollo(neo, cel, cam, con);
   var areas = [];
-  if (b.laissez) areas.push('Tendencia Laissez-Faire (P' + cel.Laissez + '): reducir los episodios de no-intervención o delegación sin acompañamiento, especialmente con colaboradores de menor madurez.');
-  if (b.directivo) areas.push('Liderazgo Directivo (P' + cam.Dir + '): fortalecer la capacidad de dar instrucciones claras y establecer expectativas no negociables en situaciones de urgencia.');
-  if (b.recompensa) areas.push('Recompensa Contingente (P' + cel.RecCont + '): implementar un sistema explícito y sistemático de reconocimiento del buen desempeño.');
-  if (b.carisma) areas.push('Carisma e Influencia Simbólica (P' + cel.Carisma + '): desarrollar el impacto simbólico y la capacidad de inspirar a través del relato y la comunicación.');
-  if (b.estimInt) areas.push('Estimulación Intelectual (P' + cel.EstimInt + '): incorporar el cuestionamiento analítico y el desafío intelectual como herramientas de desarrollo del equipo.');
-  if (b.tarea) areas.push('Conductas de Tarea (P' + con.Tar + '): fortalecer el monitoreo sistemático y la definición explícita de estándares de desempeño.');
-  if (b.autorregulacion) areas.push('Autorregulación Emocional (Neuroticismo ' + neo.nivel.N + ', T=' + neo.t.N + '): desarrollar estrategias para gestionar la reactividad emocional bajo presión sostenida.');
+  // En Laissez-Faire el nivel alto ES la brecha, así que decir "(nivel alto)" al
+  // lado de una carencia se lee al revés. Se nombra la conducta, que es lo que la
+  // devolución tiene que dejar claro.
+  if (b.laissez) areas.push('Tendencia Laissez-Faire (marcada): reducir los episodios de no-intervención o delegación sin acompañamiento, especialmente con colaboradores de menor madurez.');
+  if (b.directivo) areas.push('Liderazgo Directivo ' + nivelEntreParentesis(cam.Dir) + ': fortalecer la capacidad de dar instrucciones claras y establecer expectativas no negociables en situaciones de urgencia.');
+  if (b.recompensa) areas.push('Recompensa Contingente ' + nivelEntreParentesis(cel.RecCont) + ': implementar un sistema explícito y sistemático de reconocimiento del buen desempeño.');
+  if (b.carisma) areas.push('Carisma e Influencia Simbólica ' + nivelEntreParentesis(cel.Carisma) + ': desarrollar el impacto simbólico y la capacidad de inspirar a través del relato y la comunicación.');
+  if (b.estimInt) areas.push('Estimulación Intelectual ' + nivelEntreParentesis(cel.EstimInt) + ': incorporar el cuestionamiento analítico y el desafío intelectual como herramientas de desarrollo del equipo.');
+  if (b.tarea) areas.push('Conductas de Tarea ' + nivelEntreParentesis(con.Tar) + ': fortalecer el monitoreo sistemático y la definición explícita de estándares de desempeño.');
+  if (b.autorregulacion) areas.push('Autorregulación Emocional (neuroticismo en nivel ' + neo.nivel.N.toLowerCase() + '): desarrollar estrategias para gestionar la reactividad emocional bajo presión sostenida.');
   if (!areas.length) areas.push('El perfil no presenta brechas significativas. Ver análisis detallado en secciones anteriores.');
   vinetas(body, areas);
 

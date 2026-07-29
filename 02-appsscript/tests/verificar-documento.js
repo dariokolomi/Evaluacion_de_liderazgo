@@ -381,6 +381,17 @@ function revisarPunto5(obtenido, r) {
   if (sinBrechas && hayBrechas) {
     problemas.push('dice que no hay brechas significativas y hay brechas');
   }
+
+  // El punto 5 no lleva puntajes, venga del LLM o del texto determinista. La
+  // síntesis del LLM ya lo verifica en Sintesis.gs; acá se cubre la determinista,
+  // que es la que salió con "(P75)" en un informe real y la única que sigue
+  // teniendo los números a mano.
+  const texto = (b) => (b.tramos || []).map((t) => t.texto).join('');
+  const puntajes = obtenido.map(texto).join(' \n ')
+    .match(/\bP\d{1,2}\b|\bT\s*=\s*\d{1,3}\b|percentil|puntaje T/gi);
+  if (puntajes) {
+    problemas.push(`menciona puntajes: ${[...new Set(puntajes)].join(', ')}`);
+  }
   return problemas;
 }
 
