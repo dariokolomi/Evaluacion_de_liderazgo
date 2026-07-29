@@ -42,9 +42,32 @@
  *      hacía igual habiéndoselas prohibido en el prompt. Una instrucción no es
  *      una garantía; una verificación sí.
  *
- * Si el LLM falla —sin clave, sin red, cuota agotada, respuesta inválida— el
- * informe se genera igual con la síntesis determinista. La generación del
- * informe no puede depender de un servicio externo.
+ * DOS MODELOS ANTES DE LA SÍNTESIS DETERMINISTA
+ *
+ * El texto determinista es correcto pero pobre, así que conviene agotar las
+ * alternativas antes de caer en él. Si el modelo principal no está disponible
+ * —cuota agotada, 429, el servicio caído— se rehace la síntesis entera con un
+ * segundo modelo. Recién si los dos fallan sale el texto fijo.
+ *
+ * Se rehace ENTERA y no sólo el bloque que falló: los dos bloques se leen
+ * seguidos en la misma sección del informe, y dos modelos escriben distinto.
+ * Es la misma razón por la que un bloque fallado descarta la síntesis completa.
+ *
+ * El costo de esto es tiempo, y el tiempo acá es un recurso escaso: Apps Script
+ * corta la ejecución a los 6 minutos. Por eso la síntesis tiene un plazo propio
+ * (`LLM_PLAZO_MS`) y ninguna llamada arranca si no entra entera adentro. Sin ese
+ * plazo, dos modelos × dos bloques × dos intentos × 60 s serían 8 minutos y el
+ * informe no se generaría nunca, que es mucho peor que salir con el texto pobre.
+ *
+ * El plazo no estorba en el caso que motivó todo esto: un 429 o un 402 vuelven en
+ * menos de un segundo, así que cuando el problema es la cuota hay tiempo de sobra
+ * para el segundo modelo. Lo que el plazo corta es el otro caso —el servicio que
+ * acepta la conexión y no responde—, que es justamente el que se come los seis
+ * minutos.
+ *
+ * Si los dos modelos fallan —sin clave, sin red, cuota agotada, respuesta
+ * inválida— el informe se genera igual con la síntesis determinista. La
+ * generación del informe no puede depender de un servicio externo.
  */
 
 var PROP_LLM_API_KEY = 'NVIDIA_API_KEY';
@@ -52,21 +75,83 @@ var PROP_LLM_MODELO = 'NVIDIA_MODELO';
 
 var LLM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
-// Elegido midiendo, no por descarte. De los 118 modelos del endpoint, los más
-// rápidos que se probaron con este prompt o no están disponibles (404) o son de
-// razonamiento sin interruptor efectivo —`nemotron-3-super-120b-a12b` volcó 6000
-// caracteres de pensamiento en `content` y nunca llegó al JSON—, o son bastante
-// más lentos: `deepseek-v4-flash` 100 s, `mistral-medium-3.5` 137 s,
-// `llama-4-maverick` sin responder a los 240 s. Los chicos y rápidos
-// (`llama-3.1-8b`) escriben mal: errores de concordancia, generizan a la persona
-// evaluada y convierten la motivación extrínseca baja en un déficit.
-var LLM_MODELO_POR_DEFECTO = 'nvidia/llama-3.3-nemotron-super-49b-v1.5';
+/**
+ * Los modelos que se prueban, en orden. El segundo sólo entra si el primero no
+ * pudo redactar la síntesis.
+ *
+ * EL PRINCIPAL está elegido midiendo, no por descarte. De los 118 modelos del
+ * endpoint, los más rápidos que se probaron con este prompt o no están
+ * disponibles (404) o son de razonamiento sin interruptor efectivo
+ * —`nemotron-3-super-120b-a12b` volcó 6000 caracteres de pensamiento en `content`
+ * y nunca llegó al JSON—, o son bastante más lentos: `deepseek-v4-flash` 100 s,
+ * `mistral-medium-3.5` 137 s, `llama-4-maverick` sin responder a los 240 s. Los
+ * chicos y rápidos (`llama-3.1-8b`) escriben mal: errores de concordancia,
+ * generizan a la persona evaluada y convierten la motivación extrínseca baja en
+ * un déficit.
+ *
+ * EL SUPLENTE es la versión anterior del mismo modelo, `…super-49b-v1`. Lo que
+ * manda en esta elección es el techo de 60 s de `UrlFetchApp`: un suplente más
+ * lento que eso no sirve de nada, porque se va a cortar siempre y lo único que
+ * agrega es un par de minutos de espera antes del texto determinista de todos
+ * modos.
+ *
+ * Y sobre este endpoint, lo medido dice que casi todo es más lento. Con este
+ * mismo prompt: `meta/llama-3.3-70b-instruct` 189 s —y además prosa blanda, que
+ * dejaba de citar el dato—, `deepseek-v4-flash` 100 s, `mistral-medium-3.5` 137 s,
+ * `llama-4-maverick` sin responder a los 240 s. El único rápido, `llama-3.1-8b`
+ * (14 s), escribe mal. Y hay modelos que están en el listado del endpoint pero
+ * devuelven 404 al llamarlos: `llama-3.1-nemotron-70b-instruct` y
+ * `nemotron-nano-3-30b-a3b`. Figurar en `/v1/models` no es estar disponible.
+ *
+ * Lo único con latencia probada dentro del límite es esta arquitectura de 49B:
+ * mediana ~45 s con el prompt entero, ~25 s por bloque. La v1 es el mismo tamaño y
+ * la misma familia, así que es la única candidata de la que se puede anticipar que
+ * entra en el tiempo. De paso es la que menos desajusta el prompt, que está
+ * afinado contra la v1.5 —sus prohibiciones, su castellano rioplatense—.
+ *
+ * El precio de elegir un pariente tan cercano es que un límite que alcance a la
+ * familia entera las va a alcanzar a las dos. Se paga a propósito: un suplente
+ * independiente pero lento no cubre nada, y el escenario frecuente —el límite por
+ * modelo, que en este endpoint se cuenta por modelo— sí lo cubre un endpoint
+ * distinto de la misma familia.
+ *
+ * OJO, LO QUE NO ESTÁ MEDIDO: la latencia y la calidad de la v1 con este prompt.
+ * La latencia se puede anticipar por el tamaño; la calidad no. Si escribe peor que
+ * la v1.5, lo que sale es una síntesis peor —no una inválida—: las validaciones son
+ * las mismas para los dos y no dejan pasar ni un número inventado ni una brecha que
+ * el dato no sostenga. Conviene revisar a mano el primer informe que salga con el
+ * suplente; la nota al pie del punto 5 dice cuál lo escribió.
+ */
+var LLM_MODELOS_POR_DEFECTO = [
+  'nvidia/llama-3.3-nemotron-super-49b-v1.5',
+  'nvidia/llama-3.3-nemotron-super-49b-v1'
+];
 
 // El modelo es de razonamiento: sin apagarlo gasta el presupuesto de tokens
 // pensando y puede devolver `content: null`. Medido: "detailed thinking off"
 // —el interruptor documentado de la familia Nemotron— NO lo apaga en este
 // modelo; `/no_think` sí. Se usa el que funciona.
 var LLM_SISTEMA_THINKING = '/no_think';
+
+/**
+ * El interruptor del razonamiento no es el mismo en toda la familia.
+ *
+ * En la v1.5 `/no_think` es el único que funciona —medido— y por eso es el valor
+ * por defecto. La v1 es anterior a esa sintaxis: el interruptor que entiende es
+ * "detailed thinking off", el documentado, que en la v1.5 no hacía nada.
+ *
+ * Se resuelve por modelo y no mandando los dos juntos para no tocarle el prompt al
+ * principal, que es contra el que se midió todo lo demás. Y el que se apague
+ * importa: el `nemotron-3-super-120b` quedó descartado justamente por volcar el
+ * pensamiento en `content` y no llegar nunca al JSON.
+ */
+var LLM_THINKING_POR_MODELO = {
+  'nvidia/llama-3.3-nemotron-super-49b-v1': 'detailed thinking off'
+};
+
+function apagarRazonamiento(modelo) {
+  return LLM_THINKING_POR_MODELO[modelo] || LLM_SISTEMA_THINKING;
+}
 
 var LLM_TEMPERATURA = 0.6;
 var LLM_TOP_P = 0.95;
@@ -81,9 +166,49 @@ var LLM_MAX_TOKENS = 1200;
 // segunda) y el corte por tiempo, que partido en bloques pasó a ser un atasco
 // puntual del servicio y no la norma. Ver `pedirBloque`.
 //
-// Peor caso: 2 bloques × 2 intentos × 60 s = 4 minutos, dentro de los 6 que da
-// Apps Script contando lo que tarda el resto del informe (~2 s).
+// Peor caso por modelo: 2 bloques × 2 intentos × 60 s = 4 minutos. Con dos
+// modelos eso ya no entra en los 6 minutos de Apps Script, y por eso existe el
+// plazo de abajo: es él, y no esta constante, el que acota la corrida.
 var LLM_INTENTOS = 2;
+
+/**
+ * Cuánto puede durar TODA la síntesis, contando los dos modelos.
+ *
+ * Los 6 minutos de Apps Script son para la ejecución entera, y la síntesis no es
+ * lo único que corre: antes hay que abrir la planilla y armar el radar, y después
+ * componer el documento y exportarlo a Drive, que es lo más lento de esa mitad.
+ * Cuatro minutos y medio dejan un minuto y medio para todo eso.
+ *
+ * Es un plazo, no un temporizador: nada se interrumpe a mitad de camino. Lo único
+ * que hace es no arrancar una llamada nueva cuando no entra entera.
+ */
+var LLM_PLAZO_MS = 270000;
+
+// Lo que hay que tener libre para arrancar una llamada: los 60 s a los que corta
+// UrlFetchApp. Es el peor caso real de una llamada suelta, así que reservarlo
+// garantiza que ninguna termine después del plazo.
+var LLM_MARGEN_LLAMADA_MS = 60000;
+
+/** Si entra una llamada más antes de que se acabe el plazo. */
+function hayTiempo(vencimiento) {
+  return new Date().getTime() + LLM_MARGEN_LLAMADA_MS <= vencimiento;
+}
+
+/**
+ * Los modelos a probar, en orden.
+ *
+ * `NVIDIA_MODELO` sigue mandando sobre el valor por defecto, y ahora admite
+ * varios separados por coma. Con uno solo se comporta como antes —ese modelo y
+ * nada más—, que es lo que hoy tiene configurado quien lo haya puesto: cambiar
+ * eso en silencio le sacaría el suplente sin que se entere.
+ */
+function modelosConfigurados(propiedades) {
+  var declarados = String(propiedades.getProperty(PROP_LLM_MODELO) || '')
+    .split(',')
+    .map(function (m) { return m.trim(); })
+    .filter(function (m) { return m; });
+  return declarados.length ? declarados : LLM_MODELOS_POR_DEFECTO;
+}
 
 /**
  * Nombres largos de cada dimensión, para que el modelo escriba como el informe
@@ -464,7 +589,7 @@ function reglasComunes() {
  * Función pura y separada del fetch a propósito: el prompt es la parte que más
  * se ajusta y tiene que poder revisarse en un test sin gastar una llamada.
  */
-function mensajesBloqueDescriptivo(nombre, perfil) {
+function mensajesBloqueDescriptivo(nombre, perfil, modelo) {
   var instrucciones = reglasComunes().concat([
     '',
     'Esta es la PRIMERA de dos partes. Acá va la lectura descriptiva del perfil.',
@@ -514,7 +639,7 @@ function mensajesBloqueDescriptivo(nombre, perfil) {
   ]).join('\n');
 
   return [
-    { role: 'system', content: LLM_SISTEMA_THINKING + '\n\n' + instrucciones },
+    { role: 'system', content: apagarRazonamiento(modelo) + '\n\n' + instrucciones },
     { role: 'user', content: datosDelPerfil(perfil) }
   ];
 }
@@ -525,7 +650,7 @@ function mensajesBloqueDescriptivo(nombre, perfil) {
  * @param {Object} previo lo que devolvió el primer bloque, o null. Se le pasan
  *   los títulos para que no repita lo ya dicho.
  */
-function mensajesBloqueAnalitico(nombre, perfil, previo) {
+function mensajesBloqueAnalitico(nombre, perfil, previo, modelo) {
   var ejesPendientes = [
     'la madurez y el grado de autonomía del equipo que conduce hoy',
     'los estándares de desempeño con los que el área mide el cumplimiento',
@@ -604,7 +729,7 @@ function mensajesBloqueAnalitico(nombre, perfil, previo) {
   }
 
   return [
-    { role: 'system', content: LLM_SISTEMA_THINKING + '\n\n' + instrucciones },
+    { role: 'system', content: apagarRazonamiento(modelo) + '\n\n' + instrucciones },
     { role: 'user', content: datos }
   ];
 }
@@ -945,13 +1070,22 @@ function jsonDeRespuesta(contenido) {
  * Pide un bloque y lo valida.
  *
  * @param {Object} bloque SINTESIS_BLOQUE_DESCRIPTIVO o SINTESIS_BLOQUE_ANALITICO
+ * @param {number} vencimiento momento (ms) después del cual no se pide nada más
  * @return {Object} {datos: Object|null, motivo: string} — el motivo viaja hasta
  *   la interfaz cuando el bloque falla, así el fallback deja de ser silencioso.
  */
-function pedirBloque(bloque, mensajes, perfil, clave, modelo) {
+function pedirBloque(bloque, mensajes, perfil, clave, modelo, vencimiento) {
   var ultimoMotivo = '';
 
   for (var intento = 1; intento <= LLM_INTENTOS; intento++) {
+    if (!hayTiempo(vencimiento)) {
+      // Sin tiempo para otra llamada. Se corta acá y se dice, porque "falló el
+      // bloque" y "ni se intentó" se arreglan distinto.
+      ultimoMotivo = ultimoMotivo
+        ? ultimoMotivo + ' (y no quedaba tiempo para reintentar)'
+        : 'no quedaba tiempo para pedirlo';
+      break;
+    }
     try {
       var respuesta = UrlFetchApp.fetch(LLM_URL, {
         method: 'post',
@@ -1006,51 +1140,29 @@ function pedirBloque(bloque, mensajes, perfil, clave, modelo) {
 }
 
 /**
- * Pide la síntesis al LLM, en dos llamadas. Devuelve null si no se pudo obtener
- * una válida y completa.
+ * La síntesis completa con UN modelo: los dos bloques y la revisión de la pieza
+ * unida. Devuelve null si cualquiera de las tres cosas no salió.
  *
- * No lanza: el informe tiene que generarse igual. El motivo del fallo queda en
- * el log para poder diagnosticarlo después.
+ * Si un bloque falla se descarta la síntesis entera. Es a propósito: mezclar prosa
+ * del modelo con prosa fija —o con la de otro modelo— en la misma sección deja dos
+ * voces y habilita justamente las contradicciones que el PO señaló en HU2.
  *
- * Si un bloque falla se descarta la síntesis entera y sale la determinista. Es a
- * propósito: mezclar prosa del modelo con prosa fija en la misma sección deja
- * dos voces y habilita justamente las contradicciones que el PO señaló en HU2.
- *
- * @param {string} nombre
- * @param {Object} resultados salida de corregir()
- * @param {Function} [avisar] recibe 0 o 1 al arrancar cada bloque, para que la
- *   interfaz pueda mostrar por cuál va. Opcional: sin él todo funciona igual.
- * @return {Object} {sintesis: Object|null, motivo: string}. El motivo se devuelve
- *   —y no sólo se loguea— porque un fallback silencioso obliga a adivinar por qué
- *   el informe salió con el texto pobre. Va hasta la interfaz.
+ * @return {Object} {sintesis: Object|null, motivo: string}
  */
-function sintesisDeLiderazgo(nombre, resultados, avisar) {
-  var anunciar = function (bloque) {
-    if (typeof avisar === 'function') avisar(bloque);
-  };
-  var propiedades = PropertiesService.getScriptProperties();
-  var clave = propiedades.getProperty(PROP_LLM_API_KEY);
-  if (!clave) {
-    var sinClave = 'falta la propiedad ' + PROP_LLM_API_KEY + ' en Propiedades del script';
-    console.warn('Sin ' + PROP_LLM_API_KEY + ': la síntesis del punto 5 sale con el texto determinista.');
-    return { sintesis: null, motivo: sinClave };
-  }
-  var modelo = propiedades.getProperty(PROP_LLM_MODELO) || LLM_MODELO_POR_DEFECTO;
-  var perfil = perfilParaSintesis(resultados);
-
+function sintesisConModelo(modelo, nombre, perfil, clave, anunciar, vencimiento) {
   anunciar(0);
   var descriptivo = pedirBloque(
     SINTESIS_BLOQUE_DESCRIPTIVO,
-    mensajesBloqueDescriptivo(nombre, perfil),
-    perfil, clave, modelo
+    mensajesBloqueDescriptivo(nombre, perfil, modelo),
+    perfil, clave, modelo, vencimiento
   );
   if (!descriptivo.datos) return { sintesis: null, motivo: descriptivo.motivo };
 
   anunciar(1);
   var analitico = pedirBloque(
     SINTESIS_BLOQUE_ANALITICO,
-    mensajesBloqueAnalitico(nombre, perfil, descriptivo.datos),
-    perfil, clave, modelo
+    mensajesBloqueAnalitico(nombre, perfil, descriptivo.datos, modelo),
+    perfil, clave, modelo, vencimiento
   );
   if (!analitico.datos) return { sintesis: null, motivo: analitico.motivo };
 
@@ -1067,10 +1179,68 @@ function sintesisDeLiderazgo(nombre, resultados, avisar) {
   // que es la que efectivamente va al informe.
   var revision = validarSintesis(sintesis, perfil);
   if (!revision.ok) {
-    console.warn('La síntesis unida no validó (' + revision.motivo + '). Sale la determinista.');
     return { sintesis: null, motivo: 'la síntesis unida no validó: ' + revision.motivo };
   }
 
   sintesis.modelo = modelo;
-  return { sintesis: ponerNombre(sintesis, nombre), motivo: '' };
+  return { sintesis: sintesis, motivo: '' };
+}
+
+/**
+ * Pide la síntesis al LLM. Devuelve null si no se pudo obtener una válida y
+ * completa con ninguno de los modelos configurados.
+ *
+ * No lanza: el informe tiene que generarse igual. El motivo del fallo queda en
+ * el log para poder diagnosticarlo después.
+ *
+ * @param {string} nombre
+ * @param {Object} resultados salida de corregir()
+ * @param {Function} [avisar] recibe 0 o 1 al arrancar cada bloque, para que la
+ *   interfaz pueda mostrar por cuál va. Opcional: sin él todo funciona igual.
+ *   Con el modelo suplente la etapa vuelve a 0: la síntesis efectivamente se
+ *   está rehaciendo desde el principio, y mostrar que avanza mientras se
+ *   reempieza sería un progreso inventado.
+ * @return {Object} {sintesis: Object|null, motivo: string}. El motivo se devuelve
+ *   —y no sólo se loguea— porque un fallback silencioso obliga a adivinar por qué
+ *   el informe salió con el texto pobre. Va hasta la interfaz.
+ */
+function sintesisDeLiderazgo(nombre, resultados, avisar) {
+  var anunciar = function (bloque) {
+    if (typeof avisar === 'function') avisar(bloque);
+  };
+  var propiedades = PropertiesService.getScriptProperties();
+  var clave = propiedades.getProperty(PROP_LLM_API_KEY);
+  if (!clave) {
+    var sinClave = 'falta la propiedad ' + PROP_LLM_API_KEY + ' en Propiedades del script';
+    console.warn('Sin ' + PROP_LLM_API_KEY + ': la síntesis del punto 5 sale con el texto determinista.');
+    return { sintesis: null, motivo: sinClave };
+  }
+  var modelos = modelosConfigurados(propiedades);
+  var perfil = perfilParaSintesis(resultados);
+  var vencimiento = new Date().getTime() + LLM_PLAZO_MS;
+  var motivos = [];
+
+  for (var i = 0; i < modelos.length; i++) {
+    var intento = sintesisConModelo(modelos[i], nombre, perfil, clave, anunciar, vencimiento);
+    if (intento.sintesis) {
+      if (i > 0) {
+        // Que el principal se haya caído no lo ve nadie si la síntesis sale bien
+        // con el suplente. Queda en el log, que es donde se busca después.
+        console.warn('La síntesis salió con el modelo suplente ' + modelos[i]
+          + '. El principal falló: ' + motivos.join(' | '));
+      }
+      return { sintesis: ponerNombre(intento.sintesis, nombre), motivo: '' };
+    }
+    motivos.push(modelos[i] + ' → ' + intento.motivo);
+
+    // Sin tiempo para otro modelo, no tiene sentido seguir recorriendo la lista.
+    if (!hayTiempo(vencimiento)) {
+      if (i + 1 < modelos.length) motivos.push('sin tiempo para probar los modelos que quedaban');
+      break;
+    }
+  }
+
+  var motivo = motivos.join(' | ');
+  console.warn('Ningún modelo pudo redactar la síntesis (' + motivo + '). Sale la determinista.');
+  return { sintesis: null, motivo: motivo };
 }

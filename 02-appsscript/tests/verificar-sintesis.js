@@ -46,7 +46,9 @@ function cargarGs(propiedades, fetchSimulado) {
       mensajesBloqueDescriptivo, mensajesBloqueAnalitico, jsonDeRespuesta,
       percentilesCitados, puntajesTCitados, sintesisDeLiderazgo, nivelPorPercentil,
       validarNivelesCoherentes, ponerNombre, SINTESIS_MARCADOR_NOMBRE,
-      SINTESIS_BLOQUE_DESCRIPTIVO, SINTESIS_BLOQUE_ANALITICO };`
+      SINTESIS_BLOQUE_DESCRIPTIVO, SINTESIS_BLOQUE_ANALITICO,
+      pedirBloque, hayTiempo, modelosConfigurados, LLM_PLAZO_MS,
+      LLM_MODELOS_POR_DEFECTO };`
   )(PropertiesService, UrlFetchApp, consolaMuda);
 }
 
@@ -76,6 +78,7 @@ function fetchPorBloque(registro, torcer) {
     const esAnalitico = cuerpo.messages[0].content.indexOf('SEGUNDA de dos partes') >= 0;
     const clave = esAnalitico ? 'analitico' : 'descriptivo';
     registro.llamadas.push(clave);
+    (registro.modelos = registro.modelos || []).push(cuerpo.model);
     registro.tokens = cuerpo.max_tokens;
     const datos = esAnalitico ? bloqueAnalitico() : bloqueDescriptivo();
     return (torcer && torcer(clave, datos, registro)) || respuestaSimulada(200, JSON.stringify(datos));
@@ -173,6 +176,17 @@ const mAnal = gs.mensajesBloqueAnalitico('Fran prueba', perfil, bloqueDescriptiv
     `el bloque ${nombre} son dos mensajes, sistema y usuario`);
   ok(m[0].content.indexOf('/no_think') === 0,
     `el bloque ${nombre} arranca apagando el razonamiento del modelo`);
+  // Cada modelo entiende su propio interruptor: el de la v1.5 no apagaba a la v1.
+  // Si el razonamiento queda prendido, el modelo puede volcar el pensamiento en
+  // `content` y no llegar nunca al JSON, que es lo que descartó al 120b.
+  const conV1 = nombre === 'descriptivo'
+    ? gs.mensajesBloqueDescriptivo('Fran prueba', perfil, 'nvidia/llama-3.3-nemotron-super-49b-v1')
+    : gs.mensajesBloqueAnalitico('Fran prueba', perfil, bloqueDescriptivo(), 'nvidia/llama-3.3-nemotron-super-49b-v1');
+  ok(conV1[0].content.indexOf('detailed thinking off') === 0,
+    `el bloque ${nombre} usa el interruptor que entiende el modelo suplente`,
+    conV1[0].content.slice(0, 30));
+  ok(conV1[0].content.replace('detailed thinking off', '') === m[0].content.replace('/no_think', ''),
+    `y el resto de las instrucciones del bloque ${nombre} son las mismas para los dos modelos`);
   ok(m[1].content.indexOf('Fran prueba') < 0,
     `el nombre NO llega al bloque ${nombre}: no sale del proyecto`);
   // Los números NO llegan al prompt: es la garantía más fuerte de que el modelo
@@ -493,7 +507,9 @@ reg = { llamadas: [] };
 let error500 = cargarGs(CLAVE, fetchPorBloque(reg, () => respuestaSimulada(500, 'boom')));
 ok(error500.sintesisDeLiderazgo('Fran', resultados).sintesis === null,
   'un error de la API no devuelve síntesis');
-ok(reg.llamadas.length === 2, 'un error de la API se reintenta una vez por bloque', `hubo ${reg.llamadas.length}`);
+// 2 intentos × 2 modelos: el error se reintenta dentro del modelo, y después la
+// síntesis entera se rehace con el suplente.
+ok(reg.llamadas.length === 4, 'un error de la API se reintenta una vez por bloque y por modelo', `hubo ${reg.llamadas.length}`);
 
 reg = { llamadas: [] };
 let invalido = cargarGs(CLAVE, fetchPorBloque(reg, (clave, datos) => {
@@ -516,8 +532,8 @@ let corte = cargarGs(CLAVE, () => {
 const corteR = corte.sintesisDeLiderazgo('Fran', resultados);
 ok(corteR.sintesis === null, 'si el corte por tiempo persiste, no devuelve síntesis');
 ok(/interrump/.test(corteR.motivo), 'y el motivo dice que la llamada se interrumpió', corteR.motivo);
-ok(reg.llamadas.length === 2,
-  'un corte por tiempo se reintenta una vez', `hubo ${reg.llamadas.length}`);
+ok(reg.llamadas.length === 4,
+  'un corte por tiempo se reintenta una vez con cada modelo', `hubo ${reg.llamadas.length}`);
 
 // Y si el reintento sale a velocidad normal, la síntesis se completa igual.
 reg = { llamadas: [] };
@@ -529,6 +545,83 @@ let corteRecupera = cargarGs(CLAVE, fetchPorBloque(reg, (clave, datos, r) => {
 }));
 ok(corteRecupera.sintesisDeLiderazgo('Fran', resultados).sintesis !== null,
   'un corte en el primer intento de cada bloque se recupera en el segundo');
+
+// ── El modelo suplente ──
+//
+// Es lo que evita caer en el texto determinista cuando el problema es el modelo y
+// no la síntesis: una cuota agotada devuelve 429 y no tiene nada que ver con lo
+// que se le pidió, así que otro modelo tiene todas las chances de contestar bien.
+const PRINCIPAL = 'nvidia/llama-3.3-nemotron-super-49b-v1.5';
+const SUPLENTE = 'nvidia/llama-3.3-nemotron-super-49b-v1';
+ok(gs.LLM_MODELOS_POR_DEFECTO.join(',') === `${PRINCIPAL},${SUPLENTE}`,
+  'el principal va primero y el suplente después', gs.LLM_MODELOS_POR_DEFECTO.join(','));
+
+reg = { llamadas: [] };
+let conCuota = cargarGs(CLAVE, fetchPorBloque(reg, (clave, datos, r) =>
+  (r.modelos[r.modelos.length - 1] === PRINCIPAL
+    ? respuestaSimulada(429, 'Too Many Requests')
+    : null)));
+const conCuotaR = conCuota.sintesisDeLiderazgo('Fran', resultados);
+ok(conCuotaR.sintesis !== null,
+  'si el modelo principal agota la cuota, el suplente redacta la síntesis', conCuotaR.motivo);
+ok(conCuotaR.sintesis && conCuotaR.sintesis.modelo === SUPLENTE,
+  'y la síntesis queda sellada con el modelo que efectivamente la escribió',
+  conCuotaR.sintesis && conCuotaR.sintesis.modelo);
+ok(reg.modelos.indexOf(SUPLENTE) > reg.modelos.lastIndexOf(PRINCIPAL),
+  'el suplente entra después del principal, no antes', reg.modelos.join(','));
+// Los dos bloques del informe los escribe el mismo modelo: si el suplente
+// redactara sólo el que falló, la sección quedaría con dos voces.
+ok(reg.llamadas.slice(reg.modelos.indexOf(SUPLENTE)).join(',') === 'descriptivo,analitico',
+  'el suplente rehace la síntesis entera, no sólo el bloque que falló',
+  reg.llamadas.join(','));
+
+reg = { llamadas: [] };
+let dosFallan = cargarGs(CLAVE, fetchPorBloque(reg, () => respuestaSimulada(429, 'Too Many Requests')));
+const dosFallanR = dosFallan.sintesisDeLiderazgo('Fran', resultados);
+ok(dosFallanR.sintesis === null, 'si los dos modelos fallan sale el texto determinista');
+ok(dosFallanR.motivo.indexOf(PRINCIPAL) >= 0 && dosFallanR.motivo.indexOf(SUPLENTE) >= 0,
+  'y el motivo nombra a los dos modelos, para no adivinar cuál falló', dosFallanR.motivo);
+
+// Quien tenga NVIDIA_MODELO configurado con un solo modelo sigue con ese y nada
+// más: sumarle un suplente en silencio sería cambiarle lo que eligió.
+reg = { llamadas: [] };
+let unoSolo = cargarGs(
+  { NVIDIA_API_KEY: 'clave-de-prueba', NVIDIA_MODELO: 'un/modelo-elegido' },
+  fetchPorBloque(reg, () => respuestaSimulada(429, 'Too Many Requests')));
+unoSolo.sintesisDeLiderazgo('Fran', resultados);
+ok(reg.modelos.every((m) => m === 'un/modelo-elegido'),
+  'con un solo modelo configurado no se prueba ningún otro', reg.modelos.join(','));
+
+reg = { llamadas: [] };
+let dosConfigurados = cargarGs(
+  { NVIDIA_API_KEY: 'clave-de-prueba', NVIDIA_MODELO: ' primero/a , segundo/b ' },
+  fetchPorBloque(reg, (clave, datos, r) =>
+    (r.modelos[r.modelos.length - 1] === 'primero/a' ? respuestaSimulada(429, 'no') : null)));
+const dosConfR = dosConfigurados.sintesisDeLiderazgo('Fran', resultados);
+ok(dosConfR.sintesis && dosConfR.sintesis.modelo === 'segundo/b',
+  'la propiedad admite varios modelos separados por coma, en ese orden',
+  reg.modelos.join(','));
+
+// El plazo. Sin él, dos modelos × dos bloques × dos intentos × 60 s se pasarían
+// de los 6 minutos de Apps Script y el informe no saldría nunca.
+ok(gs.LLM_PLAZO_MS + 90000 <= 360000,
+  'el plazo de la síntesis deja margen para el resto de la corrida dentro de los 6 minutos',
+  `${gs.LLM_PLAZO_MS} ms`);
+ok(!gs.hayTiempo(new Date().getTime()), 'con el plazo vencido no entra ninguna llamada más');
+ok(!gs.hayTiempo(new Date().getTime() + 59000),
+  'ni con menos tiempo del que puede tardar una llamada suelta');
+ok(gs.hayTiempo(new Date().getTime() + gs.LLM_PLAZO_MS), 'y al arrancar sí entra');
+
+reg = { llamadas: [] };
+let vencido = cargarGs(CLAVE, fetchPorBloque(reg));
+const vencidoR = vencido.pedirBloque(
+  vencido.SINTESIS_BLOQUE_DESCRIPTIVO,
+  vencido.mensajesBloqueDescriptivo('Fran', perfil),
+  perfil, 'clave-de-prueba', PRINCIPAL, new Date().getTime() - 1);
+ok(vencidoR.datos === null && /tiempo/.test(vencidoR.motivo),
+  'con el plazo vencido el bloque no se pide y el motivo lo dice', vencidoR.motivo);
+ok(reg.llamadas.length === 0,
+  'y no se llama a la API para nada', reg.llamadas.join(','));
 
 // ── El renderizado en el documento ──
 const { DocumentApp, Body } = require('./stub-documentapp');
@@ -603,8 +696,17 @@ ok(renderSinLlm.indexOf('Objetivos de Desarrollo Sugeridos') >= 0,
   'el texto determinista conserva sus objetivos de desarrollo');
 ok(renderSinLlm.indexOf('Inferencias del Perfil') < 0,
   'el texto determinista no promete inferencias que no calcula');
-ok(!/asistida por/.test(renderSinLlm),
-  'el texto determinista no se atribuye a un modelo');
+// El informe siempre declara qué lo escribió, incluso —sobre todo— cuando lo
+// escribió el texto fijo: es el caso que más importa avisar, porque es el que hay
+// que revisar más.
+ok(/texto determinista/.test(renderSinLlm),
+  'el texto determinista declara que la síntesis no la escribió una IA');
+ok(!/asistida por IA/.test(renderSinLlm),
+  'y no se atribuye a ningún modelo');
+ok(/revisión profesional/.test(renderSinLlm),
+  'el texto determinista también pide la revisión profesional antes de la devolución');
+ok(!/llama|nemotron|nvidia/i.test(renderSinLlm),
+  'no nombra ningún modelo cuando no intervino ninguno');
 
 // ── Salida ──
 console.log(`\n${pasaron}/${pasaron + fallos.length} verificaciones de la síntesis en verde`);
