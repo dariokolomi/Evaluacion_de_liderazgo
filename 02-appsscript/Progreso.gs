@@ -20,12 +20,20 @@
  * la clave para encontrar el avance de esta corrida y nada más.
  */
 
+/**
+ * "Contrastando con el perfil de puesto" sólo corre cuando se subió uno. Sin
+ * perfil, esa etapa se saltea y su punto se pinta como hecha al pasar a la
+ * siguiente: el contador y el nombre de la etapa en curso siguen diciendo la
+ * verdad, que es lo que se mira. La alternativa —dos listas de etapas según haya
+ * o no perfil— cambia la lista debajo de una barra que ya está dibujada.
+ */
 var ETAPAS_INFORME = [
   'Abriendo planilla',
   'Corrigiendo respuestas',
   'Armando el gráfico',
   'Redactando síntesis (1 de 2)',
   'Redactando síntesis (2 de 2)',
+  'Contrastando con el puesto',
   'Componiendo el documento',
   'Guardando en Drive'
 ];

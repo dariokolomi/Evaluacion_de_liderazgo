@@ -1067,6 +1067,47 @@ function jsonDeRespuesta(contenido) {
 // ═══════════════════════════════════════════════════════════════════
 
 /**
+ * Una llamada al modelo, con el JSON ya extraído de la respuesta.
+ *
+ * Está separada de `pedirBloque` porque el punto 6 (Puesto.gs) le habla al mismo
+ * endpoint de la misma forma y valida otra cosa. Lo único que comparten es CÓMO
+ * se llama; escrito dos veces, el día que cambie un parámetro va a cambiar en un
+ * solo lado y nadie se va a enterar hasta ver un informe raro.
+ *
+ * No captura excepciones: el corte por tiempo de UrlFetchApp lo maneja quien
+ * llama, que es el que sabe si conviene reintentar.
+ *
+ * @return {Object} {datos} o {motivo} — nunca las dos cosas
+ */
+function respuestaDelModelo(mensajes, clave, modelo) {
+  var respuesta = UrlFetchApp.fetch(LLM_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + clave },
+    payload: JSON.stringify({
+      model: modelo,
+      messages: mensajes,
+      temperature: LLM_TEMPERATURA,
+      top_p: LLM_TOP_P,
+      max_tokens: LLM_MAX_TOKENS,
+      stream: false
+    }),
+    muteHttpExceptions: true
+  });
+
+  var codigo = respuesta.getResponseCode();
+  if (codigo !== 200) {
+    return { motivo: 'la API respondió ' + codigo + ': ' + respuesta.getContentText().slice(0, 300) };
+  }
+
+  var cuerpo = JSON.parse(respuesta.getContentText());
+  var eleccion = cuerpo.choices && cuerpo.choices[0];
+  var datos = jsonDeRespuesta(eleccion && eleccion.message && eleccion.message.content);
+  if (!datos) return { motivo: 'la respuesta no traía JSON interpretable' };
+  return { datos: datos };
+}
+
+/**
  * Pide un bloque y lo valida.
  *
  * @param {Object} bloque SINTESIS_BLOQUE_DESCRIPTIVO o SINTESIS_BLOQUE_ANALITICO
@@ -1087,35 +1128,13 @@ function pedirBloque(bloque, mensajes, perfil, clave, modelo, vencimiento) {
       break;
     }
     try {
-      var respuesta = UrlFetchApp.fetch(LLM_URL, {
-        method: 'post',
-        contentType: 'application/json',
-        headers: { Authorization: 'Bearer ' + clave },
-        payload: JSON.stringify({
-          model: modelo,
-          messages: mensajes,
-          temperature: LLM_TEMPERATURA,
-          top_p: LLM_TOP_P,
-          max_tokens: LLM_MAX_TOKENS,
-          stream: false
-        }),
-        muteHttpExceptions: true
-      });
-
-      var codigo = respuesta.getResponseCode();
-      if (codigo !== 200) {
-        ultimoMotivo = 'la API respondió ' + codigo + ': ' + respuesta.getContentText().slice(0, 300);
+      var respuesta = respuestaDelModelo(mensajes, clave, modelo);
+      if (!respuesta.datos) {
+        ultimoMotivo = respuesta.motivo;
         continue;
       }
 
-      var cuerpo = JSON.parse(respuesta.getContentText());
-      var eleccion = cuerpo.choices && cuerpo.choices[0];
-      var datos = jsonDeRespuesta(eleccion && eleccion.message && eleccion.message.content);
-      if (!datos) {
-        ultimoMotivo = 'la respuesta no traía JSON interpretable';
-        continue;
-      }
-
+      var datos = respuesta.datos;
       var revision = validarBloque(bloque, datos, perfil);
       if (!revision.ok) {
         ultimoMotivo = revision.motivo;
@@ -1200,11 +1219,15 @@ function sintesisConModelo(modelo, nombre, perfil, clave, anunciar, vencimiento)
  *   Con el modelo suplente la etapa vuelve a 0: la síntesis efectivamente se
  *   está rehaciendo desde el principio, y mostrar que avanza mientras se
  *   reempieza sería un progreso inventado.
+ * @param {number} [vencimiento] momento (ms) después del cual no se pide nada más.
+ *   Lo pasa el orquestador para que la síntesis y la narrativa del punto 6
+ *   compartan un solo plazo: los seis minutos de Apps Script son de la corrida
+ *   entera, no de cada sección. Sin él se abre uno propio y todo funciona igual.
  * @return {Object} {sintesis: Object|null, motivo: string}. El motivo se devuelve
  *   —y no sólo se loguea— porque un fallback silencioso obliga a adivinar por qué
  *   el informe salió con el texto pobre. Va hasta la interfaz.
  */
-function sintesisDeLiderazgo(nombre, resultados, avisar) {
+function sintesisDeLiderazgo(nombre, resultados, avisar, vencimiento) {
   var anunciar = function (bloque) {
     if (typeof avisar === 'function') avisar(bloque);
   };
@@ -1217,11 +1240,11 @@ function sintesisDeLiderazgo(nombre, resultados, avisar) {
   }
   var modelos = modelosConfigurados(propiedades);
   var perfil = perfilParaSintesis(resultados);
-  var vencimiento = new Date().getTime() + LLM_PLAZO_MS;
+  var plazo = vencimiento || (new Date().getTime() + LLM_PLAZO_MS);
   var motivos = [];
 
   for (var i = 0; i < modelos.length; i++) {
-    var intento = sintesisConModelo(modelos[i], nombre, perfil, clave, anunciar, vencimiento);
+    var intento = sintesisConModelo(modelos[i], nombre, perfil, clave, anunciar, plazo);
     if (intento.sintesis) {
       if (i > 0) {
         // Que el principal se haya caído no lo ve nadie si la síntesis sale bien
@@ -1234,7 +1257,7 @@ function sintesisDeLiderazgo(nombre, resultados, avisar) {
     motivos.push(modelos[i] + ' → ' + intento.motivo);
 
     // Sin tiempo para otro modelo, no tiene sentido seguir recorriendo la lista.
-    if (!hayTiempo(vencimiento)) {
+    if (!hayTiempo(plazo)) {
       if (i + 1 < modelos.length) motivos.push('sin tiempo para probar los modelos que quedaban');
       break;
     }

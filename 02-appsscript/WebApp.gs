@@ -31,7 +31,7 @@ var TITULO = 'Informes de Liderazgo — CCHH';
  * mismo que un despliegue, y un número que se mueve sin que nadie lo decida no
  * sirve para hablar de "la 2.4".
  */
-var VERSION_APP = 'v2.17';
+var VERSION_APP = 'v2.18';
 
 var LIMITE_HISTORIAL_COMPLETO = 5000;
 
@@ -142,13 +142,78 @@ function extensionDePlanilla(nombre) {
   return false;
 }
 
+/** Con qué tipo se guarda en Drive el perfil de puesto que llega del navegador. */
+var MIME_DE_PERFIL = {
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.doc': 'application/msword'
+};
+
+function mimeDePerfil(nombre) {
+  var minusculas = String(nombre).toLowerCase();
+  for (var extension in MIME_DE_PERFIL) {
+    if (!Object.prototype.hasOwnProperty.call(MIME_DE_PERFIL, extension)) continue;
+    if (minusculas.slice(-extension.length) === extension) return MIME_DE_PERFIL[extension];
+  }
+  return 'application/octet-stream';
+}
+
 /**
- * El nombre que manda el navegador, reducido a un nombre de archivo.
- * Los separadores de ruta se cambian por guiones: un nombre con barras no puede
- * crear carpetas en Drive, pero sí queda ilegible en la lista.
+ * Deja un perfil de puesto en la carpeta y LO LEE.
+ *
+ * La lectura va acá y no en la generación del informe a propósito: es una llamada
+ * al LLM y la corrida del informe ya tiene comprometido su presupuesto de tiempo
+ * (ver Puesto.gs). Además, leerlo ahora es lo que permite mostrar en el acto qué
+ * entendió el sistema, cuando todavía se puede corregir el documento y volver a
+ * subirlo.
+ *
+ * Va a la MISMA carpeta que las planillas: los archivos de una evaluación se
+ * agrupan por el código que les pone `renombrarInsumo` al terminar la corrida, no
+ * por estar en carpetas distintas.
+ *
+ * Si el perfil no se puede leer, el archivo se descarta. Un archivo subido que no
+ * sirve para nada sólo ensucia la carpeta y confunde a quien la mire después.
+ *
+ * @param {Object} pedido {nombre, datosBase64}
+ * @return {Object} {id, nombre, puesto, exigencias, descartadas, noMedidos, modelo}
  */
-function nombreDeArchivoSeguro(nombre) {
-  return String(nombre).replace(/[\/\\]+/g, '-').trim();
+function subirPerfilDePuesto(pedido) {
+  var config = configuracion();
+  exigirAcceso(config.grupoAutorizado);
+
+  var nombre = nombreDeArchivoSeguro((pedido && pedido.nombre) || '');
+  var datos = (pedido && pedido.datosBase64) || '';
+  if (!nombre) throw new Error('El archivo no tiene nombre.');
+  if (!datos) throw new Error('El archivo llegó vacío.');
+  if (!extensionDePerfil(nombre)) {
+    throw new Error('El perfil de puesto tiene que ser .pdf, .docx o .doc. Llegó "'
+      + nombre + '".');
+  }
+
+  var bytes = Utilities.base64Decode(datos);
+  if (bytes.length > MAX_PERFIL_BYTES) {
+    throw new Error('El perfil pesa ' + Math.round(bytes.length / 1024 / 1024)
+      + ' MB y el máximo es ' + (MAX_PERFIL_BYTES / 1024 / 1024) + ' MB.');
+  }
+
+  var blob = Utilities.newBlob(bytes, mimeDePerfil(nombre), nombre);
+  var archivo = DriveApp.getFolderById(config.carpetaPlanillasId).createFile(blob);
+
+  var lectura;
+  try {
+    lectura = leerPerfilDePuesto(archivo.getId());
+  } catch (e) {
+    try {
+      archivo.setTrashed(true);
+    } catch (borrado) {
+      console.warn('No se pudo descartar el perfil ilegible: ' + borrado.message);
+    }
+    throw e;
+  }
+
+  lectura.id = archivo.getId();
+  lectura.nombre = archivo.getName();
+  return lectura;
 }
 
 /** Genera el informe. Devuelve lo mismo que generarInforme(). */
@@ -162,6 +227,7 @@ function listarHistorial(limite) {
   return leerCorridas(config.historialId, limite || 25).map(function (corrida) {
     return {
       fila: corrida.fila,
+      codigo: corrida.codigo,
       fecha: corrida.fecha instanceof Date
         ? Utilities.formatDate(corrida.fecha, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')
         : String(corrida.fecha),

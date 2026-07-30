@@ -186,6 +186,14 @@ function construirInforme(body, datos) {
   seccionGrafico(body, datos.nombre, datos.imagenRadar, r.radar, cel.Laissez);
   body.appendPageBreak();
   seccionSintesis(body, neo, cel, cam, pot, con, datos.sintesis);
+
+  // El punto 6 sólo existe si se subió un perfil de puesto. Sin él, el informe
+  // termina en el punto 5 exactamente como antes: es información que se agrega,
+  // no una sección que quede vacía o con un "no aplica".
+  if (datos.puesto) {
+    body.appendPageBreak();
+    seccionPuesto(body, datos.nombre, datos.puesto, r);
+  }
 }
 
 function portada(body, nombre, fecha) {
@@ -602,4 +610,219 @@ function vinetas(body, items) {
     p.setIndentStart(SANGRIA_VINETA_PT);
     textoNormal(p, '• ' + item);
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Punto 6 — contraste con el Perfil de Puesto
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Punto 6 del informe.
+ *
+ * Se emite sólo cuando se subió un perfil de puesto. TODOS los números de esta
+ * sección —el índice, la cobertura, el nivel de riesgo, el efecto de cada
+ * alerta— salen de `Puesto.gs`, que los calcula con los mismos cortes que usan
+ * las secciones 1 a 5. Lo único que puede venir del modelo es la prosa, y cuando
+ * no viene, la sección se emite igual con el texto armado por reglas.
+ *
+ * @param {Object} adecuacion salida de adecuacionAlPuesto()
+ * @param {Object} resultados salida de corregir(), para el plan de desarrollo
+ */
+function seccionPuesto(body, nombre, adecuacion, resultados) {
+  parrafo(body, '6. Contraste con el Perfil de Puesto', { negrita: true, centrado: true, tamano: 13 });
+  if (adecuacion.puesto) {
+    parrafo(body, 'Puesto evaluado: ' + adecuacion.puesto, { negrita: true });
+  }
+  body.appendParagraph('');
+
+  matrizDeCoincidencia(body, nombre, adecuacion, resultados.camin.percentil);
+  body.appendParagraph('');
+  alertasSobreElIndice(body, adecuacion);
+  body.appendParagraph('');
+  fortalezasYRiesgos(body, adecuacion);
+  body.appendParagraph('');
+  planDeDesarrollo(body, adecuacion, resultados);
+  notaDeAutoriaDelPuesto(body, adecuacion);
+}
+
+/** 6.1 — el índice, su cobertura y la tabla que lo sostiene. */
+function matrizDeCoincidencia(body, nombre, adecuacion, cam) {
+  parrafo(body, '6.1 Matriz de Coincidencia Estratégica', { negrita: true, tamano: 11 });
+
+  if (adecuacion.porcentaje === null) {
+    // Sin exigencias calculables no se imprime un 0 %: se leería como "no sirve
+    // para el puesto", que es lo contrario de lo que el dato dice.
+    parrafo(body, 'No se pudo calcular un índice de adecuación: ninguna de las '
+      + 'exigencias que el perfil de puesto declara corresponde a lo que estos '
+      + 'instrumentos miden.');
+    return;
+  }
+
+  var p = body.appendParagraph('');
+  textoNegrita(p, 'Índice de adecuación: ', { tamano: 12 });
+  textoNegrita(p, adecuacion.porcentaje + ' %', { tamano: 12, color: AZUL_INSTITUCIONAL });
+
+  parrafo(body, 'Calculado sobre ' + adecuacion.cobertura.medidos + ' de los '
+    + adecuacion.cobertura.total + ' requisitos que declara el perfil de puesto: los '
+    + 'otros ' + adecuacion.cobertura.noMedidos + ' —formación, experiencia y '
+    + 'conocimientos técnicos— no los mide esta batería y se evalúan por otra vía.',
+    { cursiva: true, tamano: 10 });
+  body.appendParagraph('');
+
+  var filas = adecuacion.filas.map(function (f) {
+    return [
+      f.dimension + (f.critica ? ' (crítica)' : ''),
+      f.requerido,
+      f.real,
+      f.puntaje + ' / 100'
+    ];
+  });
+  var tabla = agregarTabla(body,
+    ['Dimensión que el puesto exige', 'Nivel requerido', 'Nivel del perfil', 'Aporte al índice'],
+    filas, [1, 2, 3]);
+  adecuacion.filas.forEach(function (f, i) {
+    ponerCelda(tabla, i + 1, 0, filas[i][0], { negrita: f.critica });
+    // El color sale del aporte y no del nivel: acá lo que importa es si cubre lo
+    // que el puesto pide, no si el nivel es alto en abstracto. Una dimensión en
+    // nivel bajo que el puesto quiere baja tiene que verse en verde.
+    var color = f.puntaje === 100 ? VERDE_SUAVE : (f.puntaje <= 50 ? NARANJA_SUAVE : null);
+    if (color) pintarCelda(tabla, i + 1, 3, color);
+  });
+
+  body.appendParagraph('');
+  // La misma frase que la sección 3, con la misma función: el ajuste situacional
+  // no puede decir una cosa en la página 3 y otra en la 6.
+  parrafo(body, fraseSituacional(adecuacion.perfil, cam));
+}
+
+/** 6.2 — qué empuja el índice para arriba o para abajo. */
+function alertasSobreElIndice(body, adecuacion) {
+  parrafo(body, '6.2 Alertas sobre el índice', { negrita: true, tamano: 11 });
+
+  if (adecuacion.porcentaje === null) {
+    parrafo(body, 'Sin índice no hay alertas sobre el índice.');
+    return;
+  }
+  if (!adecuacion.alertas.length) {
+    parrafo(body, 'No se detectaron inconsistencias que modifiquen la lectura del '
+      + 'índice: todas las exigencias se apoyan en el texto del perfil de puesto y '
+      + 'ninguna contradice al resto del informe.');
+    return;
+  }
+
+  parrafo(body, 'El índice es una cuenta con supuestos. Esto es lo que lo empuja en '
+    + 'cada dirección, con el efecto medido en puntos porcentuales:', { cursiva: true, tamano: 10 });
+  body.appendParagraph('');
+
+  var filas = adecuacion.alertas.map(function (a) {
+    return [a.alerta, flechaDeAlerta(a), a.queMirar];
+  });
+  var tabla = agregarTabla(body, ['Inconsistencia detectada', 'Efecto', 'Qué mirar'],
+    filas, [1]);
+  adecuacion.alertas.forEach(function (a, i) {
+    var color = a.direccion === 'baja' ? NARANJA_SUAVE
+      : (a.direccion === 'sube' ? VERDE_SUAVE : null);
+    if (color) pintarCelda(tabla, i + 1, 1, color);
+  });
+}
+
+/**
+ * Cómo se escribe el efecto de una alerta.
+ * Sin puntos, la alerta describe el alcance del índice y no lo mueve: decir
+ * "0 pp" ahí haría pensar que se midió y dio cero.
+ */
+function flechaDeAlerta(alerta) {
+  if (!alerta.puntos) return 'alcance';
+  return (alerta.direccion === 'sube' ? '▲ +' : '▼ −') + alerta.puntos + ' pp';
+}
+
+/** 6.3 y 6.4 — fortalezas apalancables, riesgos y nivel de riesgo operativo. */
+function fortalezasYRiesgos(body, adecuacion) {
+  var n = adecuacion.narrativa;
+
+  parrafo(body, '6.3 Fortalezas Clave para el Puesto', { negrita: true, tamano: 11 });
+  if (n) {
+    vinetasConTitulo(body, n.fortalezasApalancables);
+  } else if (adecuacion.fortalezas.length) {
+    vinetas(body, adecuacion.fortalezas.map(function (f) {
+      return f.dimension + ' (nivel ' + f.real.toLowerCase() + '): cubre lo que el '
+        + 'puesto pide en nivel ' + f.requerido.toLowerCase() + '.';
+    }));
+  } else {
+    parrafo(body, 'Ninguna de las dimensiones que el puesto exige aparece como '
+      + 'fortaleza consolidada en este perfil.');
+  }
+  body.appendParagraph('');
+
+  parrafo(body, '6.4 Riesgos y Brechas', { negrita: true, tamano: 11 });
+  var p = body.appendParagraph('');
+  textoNegrita(p, 'Nivel de riesgo operativo: ');
+  textoNegrita(p, adecuacion.riesgo || 'no clasificable', { color: AZUL_INSTITUCIONAL });
+  textoNormal(p, adecuacion.riesgo
+    ? ' — según cuántas exigencias que el puesto presenta como centrales del rol '
+      + 'quedan sin cubrir.'
+    : ' — ninguna de las exigencias del puesto pudo contrastarse con esta batería.');
+  body.appendParagraph('');
+
+  if (n) {
+    vinetasConTitulo(body, n.riesgos);
+  } else if (adecuacion.brechas.length) {
+    vinetas(body, adecuacion.brechas.map(function (f) {
+      return f.dimension + (f.critica ? ' (crítica para el puesto)' : '')
+        + ': el puesto la pide en nivel ' + f.requerido.toLowerCase()
+        + ' y el perfil está en nivel ' + f.real.toLowerCase() + '.';
+    }));
+  } else {
+    parrafo(body, 'El perfil cubre todas las exigencias que el puesto declara y que '
+      + 'esta batería puede medir.');
+  }
+}
+
+/** 6.5 — el plan de desarrollo, ordenado por lo que este puesto necesita. */
+function planDeDesarrollo(body, adecuacion, resultados) {
+  parrafo(body, '6.5 Plan Personalizado de Desarrollo', { negrita: true, tamano: 11 });
+
+  var plan = planDeDesarrolloParaElPuesto(resultados, adecuacion);
+  if (!plan.prioritarias.length) {
+    parrafo(body, 'Ninguna de las competencias a desarrollar de la sección 3 '
+      + 'corresponde a una dimensión que este puesto exija. El plan de desarrollo '
+      + 'aplicable es el de esa sección, sin prioridades propias de este puesto.');
+    return;
+  }
+
+  parrafo(body, 'Las competencias de la sección 3 que este puesto vuelve '
+    + 'prioritarias, en ese orden:', { cursiva: true, tamano: 10 });
+  body.appendParagraph('');
+
+  var filas = plan.prioritarias.map(function (fila, i) {
+    return [(i + 1) + '. ' + fila[0], fila[1], fila[2]];
+  });
+  var tabla = agregarTabla(body,
+    ['Competencia prioritaria', 'Fundamento', 'Acción de desarrollo sugerida'], filas);
+  filas.forEach(function (fila, i) {
+    ponerCelda(tabla, i + 1, 0, fila[0], { negrita: true });
+  });
+}
+
+/**
+ * Quién escribió la prosa del punto 6.
+ *
+ * Misma razón que `notaDeAutoria` en el punto 5: el informe se archiva y quien lo
+ * lee después tiene que poder saber qué parte la redactó un modelo. Acá se agrega
+ * algo más —que los números son del sistema— porque es justamente lo que
+ * distingue a esta sección: la prosa puede ser asistida, la cuenta nunca lo es.
+ */
+function notaDeAutoriaDelPuesto(body, adecuacion) {
+  body.appendParagraph('');
+  var quien = adecuacion.narrativa && adecuacion.narrativa.modelo
+    ? 'Prosa asistida por IA ' + nombreDeModelo(adecuacion.narrativa.modelo)
+    : 'Prosa generada con el texto determinista del sistema, sin asistencia de IA';
+  var comoSeLeyo = adecuacion.modelo
+    ? ' El perfil de puesto lo interpretó ' + nombreDeModelo(adecuacion.modelo)
+      + ', y cada exigencia se verificó contra una cita literal del documento.'
+    : '';
+  parrafo(body, quien + '. El índice de adecuación, la cobertura, el nivel de riesgo '
+    + 'y las alertas los calcula el sistema con los mismos cortes que el resto del '
+    + 'informe.' + comoSeLeyo + ' Requiere revisión profesional antes de la devolución.',
+    { cursiva: true, tamano: 8 });
 }
