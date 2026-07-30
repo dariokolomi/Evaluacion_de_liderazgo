@@ -21,8 +21,15 @@
  */
 
 /**
- * "Contrastando con el perfil de puesto" sólo corre cuando se subió uno. Sin
- * perfil, esa etapa se saltea y su punto se pinta como hecha al pasar a la
+ * Siete etapas, dentro de las "entre 5 y 7" que pidió el PO.
+ *
+ * El punto 6 sumó "Contrastando con el puesto" y, para no pasarse, las dos
+ * etapas de la síntesis se fusionaron en una. Se pierde el detalle de por cuál
+ * de los dos bloques va —cada uno tarda unos 25 segundos—, y se gana que la
+ * línea siga leyéndose de un vistazo, que es para lo que existe.
+ *
+ * "Contrastando con el puesto" sólo corre cuando se subió un perfil de puesto.
+ * Sin perfil, esa etapa se saltea y su punto se pinta como hecha al pasar a la
  * siguiente: el contador y el nombre de la etapa en curso siguen diciendo la
  * verdad, que es lo que se mira. La alternativa —dos listas de etapas según haya
  * o no perfil— cambia la lista debajo de una barra que ya está dibujada.
@@ -31,8 +38,7 @@ var ETAPAS_INFORME = [
   'Abriendo planilla',
   'Corrigiendo respuestas',
   'Armando el gráfico',
-  'Redactando síntesis (1 de 2)',
-  'Redactando síntesis (2 de 2)',
+  'Redactando la síntesis',
   'Contrastando con el puesto',
   'Componiendo el documento',
   'Guardando en Drive'
