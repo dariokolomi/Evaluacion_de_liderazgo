@@ -31,7 +31,7 @@ var TITULO = 'Informes de Liderazgo — CCHH';
  * mismo que un despliegue, y un número que se mueve sin que nadie lo decida no
  * sirve para hablar de "la 2.4".
  */
-var VERSION_APP = 'v2.16';
+var VERSION_APP = 'v2.17';
 
 var LIMITE_HISTORIAL_COMPLETO = 5000;
 
@@ -76,31 +76,8 @@ function escaparHtml(texto) {
 
 // ── Funciones que llama el navegador ───────────────────────────────
 
-var MIMES_DE_PLANILLA = [
-  'application/vnd.google-apps.spreadsheet',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-excel'
-];
-
-/** Planillas disponibles en la carpeta configurada, la más nueva primero. */
-function listarPlanillas() {
-  var config = configuracion();
-  exigirAcceso(config.grupoAutorizado);
-
-  var archivos = DriveApp.getFolderById(config.carpetaPlanillasId).getFiles();
-  var planillas = [];
-  while (archivos.hasNext()) {
-    var archivo = archivos.next();
-    if (MIMES_DE_PLANILLA.indexOf(archivo.getMimeType()) < 0) continue;
-    planillas.push({
-      id: archivo.getId(),
-      nombre: archivo.getName(),
-      actualizado: archivo.getLastUpdated().getTime()
-    });
-  }
-  planillas.sort(function (a, b) { return b.actualizado - a.actualizado; });
-  return planillas;
-}
+/** Con qué tipo se guarda en Drive la planilla que llega del navegador. */
+var MIME_DE_PLANILLA = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /**
  * Cuánto puede pesar una planilla que se sube desde el navegador.
@@ -151,7 +128,7 @@ function subirPlanilla(pedido) {
       + ' MB y el máximo es ' + (MAX_PLANILLA_BYTES / 1024 / 1024) + ' MB.');
   }
 
-  var blob = Utilities.newBlob(bytes, MIMES_DE_PLANILLA[1], nombre);
+  var blob = Utilities.newBlob(bytes, MIME_DE_PLANILLA, nombre);
   var archivo = DriveApp.getFolderById(config.carpetaPlanillasId).createFile(blob);
   return { id: archivo.getId(), nombre: archivo.getName() };
 }
