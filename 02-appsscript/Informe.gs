@@ -58,10 +58,14 @@ function generarInforme(pedido) {
 
     // Devuelve null si el LLM no está configurado o no contestó a tiempo; en ese
     // caso el punto 5 sale con la síntesis determinista. Ver Sintesis.gs.
-    // Las dos etapas de la síntesis las marca el propio módulo, que es el que
-    // sabe cuándo arranca cada bloque.
-    var intentoSintesis = sintesisDeLiderazgo(nombre, resultados, function (bloque) {
-      marcarEtapa(token, bloque === 0 ? 3 : 4);
+    //
+    // La etapa la marca el aviso del propio módulo y no una línea acá arriba: así
+    // se anuncia cuando la síntesis EMPIEZA de verdad, no cuando el orquestador
+    // llega a la llamada. Los dos bloques comparten etapa —eran dos y se
+    // fusionaron en una, ver Progreso.gs—, así que el segundo aviso la remarca
+    // sin moverla.
+    var intentoSintesis = sintesisDeLiderazgo(nombre, resultados, function () {
+      marcarEtapa(token, 3);
     }, vencimiento);
     var sintesis = intentoSintesis.sintesis;
 
@@ -69,14 +73,14 @@ function generarInforme(pedido) {
     // deterministas; sólo la prosa pasa por el modelo, y si no sale, sale la fija.
     var puesto = null;
     if (lecturaDePuesto) {
-      marcarEtapa(token, 5);
+      marcarEtapa(token, 4);
       puesto = adecuacionAlPuesto(lecturaDePuesto, resultados);
       var intentoNarrativa = narrativaDelPuesto(puesto, resultados, vencimiento);
       puesto.narrativa = ponerNombreEnNarrativa(intentoNarrativa.narrativa, nombre);
       puesto.narrativaMotivo = intentoNarrativa.motivo;
     }
 
-    marcarEtapa(token, 6);
+    marcarEtapa(token, 5);
     var codigo = reservarCodigo(config.historialId);
     var nombreArchivo = nombreDeInforme(codigo, nombre, inicio);
     var doc = DocumentApp.create(nombreArchivo);
@@ -95,7 +99,7 @@ function generarInforme(pedido) {
     quitarParrafoInicialVacio(cuerpo);
     doc.saveAndClose();
 
-    marcarEtapa(token, 7);
+    marcarEtapa(token, 6);
     var archivo = guardarComoDocx(doc.getId(), nombreArchivo, config.carpetaInformesId);
 
     // Los insumos se renombran DESPUÉS de que el informe existe: si la corrida se
