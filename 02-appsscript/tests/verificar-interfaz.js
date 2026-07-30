@@ -58,6 +58,17 @@ function main() {
     /function subiendo\(activo\)[\s\S]{0,400}\$\('generar'\)\.disabled = activo/.test(js));
   revisar('al servidor va el base64 sin el prefijo data:',
     /String\(lector\.result\)\.split\(','\)\[1\]/.test(js));
+  // La subida es la única fuente de planilla: no hay desplegable ni se le pide
+  // al servidor la lista de la carpeta.
+  revisar('no hay un desplegable para elegir entre las planillas de la carpeta',
+    !/<select id="planilla"/.test(marcado) && !/listarPlanillas/.test(js));
+  revisar('el nombre de la planilla cargada queda a la vista',
+    ids.has('planilla-elegida'));
+  revisar('generar arranca bloqueado y sólo se abre con una planilla cargada',
+    /<button id="generar" disabled>/.test(marcado)
+    && /\$\('generar'\)\.disabled = activo \|\| !planillaElegida/.test(js));
+  revisar('el informe se genera con la planilla subida',
+    /const planillaId = planillaElegida \? planillaElegida\.id : ''/.test(js));
 
   // ── Período del tablero ──
   revisar('el tablero arranca en la semana',

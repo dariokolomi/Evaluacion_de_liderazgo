@@ -76,6 +76,11 @@
       flex-wrap: wrap;
     }
     .ayuda { font-size: .78rem; color: #7b8794; }
+    /* El nombre de la planilla cargada: mismo tamaño que la ayuda pero en el
+       color del texto, porque no es una indicación sino el dato con el que se va
+       a generar el informe. */
+    .elegida { margin-top: .4rem; color: var(--texto); }
+    .elegida:empty { display: none; }
     /* Pie del formulario: una línea lo separa de los campos y la acción principal
        queda alineada con el borde izquierdo, que es donde vuelve la vista después
        de leer los campos de arriba. */
@@ -249,12 +254,18 @@
       <h2>Generar un informe</h2>
       <div class="campos">
         <div>
-          <label for="planilla">Planilla de respuestas</label>
-          <select id="planilla"><option value="">Cargando…</option></select>
+          <!-- La planilla se sube, no se elige de una lista. El desplegable
+               mostraba todas las planillas de la carpeta; ahora la única fuente es
+               el archivo que trae quien genera el informe, y el contenido de la
+               carpeta deja de estar a la vista en la pantalla. -->
+          <label for="subir">Planilla de respuestas</label>
           <div class="bajo-campo">
             <button type="button" id="subir" class="secundario chico">Subir planilla…</button>
             <span class="ayuda">.xlsx o .xls, hasta 10 MB</span>
           </div>
+          <!-- Sin desplegable no hay nada que muestre qué planilla quedó cargada,
+               así que el nombre se escribe acá y se queda a la vista. -->
+          <div id="planilla-elegida" class="ayuda elegida"></div>
           <!-- El input de archivo va escondido y lo dispara el botón: así la
                subida se ve como el resto de los botones en vez de como el control
                nativo, que cada navegador dibuja distinto. El botón es un <button>
@@ -413,38 +424,26 @@
       $('resultado').replaceChildren(aviso);
     }
 
-    /** @param {string=} seleccionar id de la planilla que queda elegida al recargar. */
-    function cargarPlanillas(seleccionar) {
-      google.script.run
-        .withSuccessHandler((planillas) => {
-          const select = $('planilla');
-          select.replaceChildren();
-          if (!planillas.length) {
-            select.appendChild(new Option('No hay planillas en la carpeta', ''));
-            return;
-          }
-          select.appendChild(new Option('Elegí una planilla…', ''));
-          planillas.forEach((p) => select.appendChild(new Option(p.nombre, p.id)));
-          if (seleccionar) select.value = seleccionar;
-          $('generar').disabled = false;
-        })
-        .withFailureHandler((e) => {
-          $('planilla').replaceChildren(new Option('No se pudieron listar las planillas', ''));
-          mostrarAviso('error', [e.message]);
-        })
-        .listarPlanillas();
-    }
-
     // ── Subida de planillas ───────────────────────────────────────
     // El archivo viaja en base64 dentro de google.script.run: la app corre en un
     // iframe de Apps Script y no hay un endpoint al que hacerle un POST.
 
+    /** La planilla cargada, {id, nombre}, o null si todavía no se subió ninguna. */
+    let planillaElegida = null;
+
     function subiendo(activo) {
       $('subir').disabled = activo;
       $('subir').textContent = activo ? 'Subiendo…' : 'Subir planilla…';
-      // Generar queda bloqueado mientras tanto: la lista está por cambiar y sería
-      // fácil disparar un informe con la planilla anterior todavía seleccionada.
-      $('generar').disabled = activo;
+      // Generar queda bloqueado mientras sube —la planilla está por cambiar— y
+      // también antes de la primera subida: sin desplegable, la subida es la
+      // única forma de que haya una planilla con la que generar.
+      $('generar').disabled = activo || !planillaElegida;
+    }
+
+    function mostrarPlanillaElegida() {
+      $('planilla-elegida').textContent = planillaElegida
+        ? 'Cargada: ' + planillaElegida.nombre
+        : '';
     }
 
     function subirArchivo(archivo) {
@@ -459,8 +458,9 @@
         const datosBase64 = String(lector.result).split(',')[1] || '';
         google.script.run
           .withSuccessHandler((planilla) => {
+            planillaElegida = planilla;
+            mostrarPlanillaElegida();
             subiendo(false);
-            cargarPlanillas(planilla.id);
             mostrarAviso('ok', ['Planilla subida: ' + planilla.nombre + '. Ya está elegida.']);
             $('evaluado').focus();
           })
@@ -659,9 +659,9 @@
     }
 
     $('generar').addEventListener('click', () => {
-      const planillaId = $('planilla').value;
+      const planillaId = planillaElegida ? planillaElegida.id : '';
       const nombre = $('evaluado').value.trim();
-      if (!planillaId) return mostrarAviso('error', ['Elegí una planilla de respuestas.']);
+      if (!planillaId) return mostrarAviso('error', ['Subí la planilla de respuestas.']);
       if (!nombre) return mostrarAviso('error', ['Escribí el nombre de la persona evaluada.']);
 
       $('generar').disabled = true;
@@ -965,7 +965,6 @@
     $('tab-informes').addEventListener('click', () => mostrarVista('informes'));
     $('tab-metricas').addEventListener('click', () => mostrarVista('metricas'));
 
-    cargarPlanillas();
     cargarHistorial();
   </script>
 </body>

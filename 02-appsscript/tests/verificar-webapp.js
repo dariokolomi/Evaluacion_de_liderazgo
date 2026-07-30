@@ -202,7 +202,7 @@ function cargarGs(globales) {
   const nombres = Object.keys(globales);
   return new Function(
     ...nombres,
-    `${fuente}\nreturn { doGet, listarPlanillas, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml,
+    `${fuente}\nreturn { doGet, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml,
        progresoDeInforme, marcarEtapa, limpiarProgreso, ETAPAS_INFORME, VERSION_APP,
        compararHistorialConDrive, idDeUrlDeDrive, contarCorridas, vaciarCorridas,
        HOJA_RESPALDO_PREFIJO, subirPlanilla, MAX_PLANILLA_BYTES };`
@@ -249,17 +249,6 @@ function main() {
   revisar('la página de error escapa el HTML que le llega',
     (conInyeccion.registro.htmlCrudo || '').indexOf('<script>alert') < 0
     && conInyeccion.registro.htmlCrudo.indexOf('&lt;script&gt;') > 0);
-
-  // ── listarPlanillas ──
-  const planillas = intentar(() => gs.listarPlanillas());
-  revisar('lista sólo planillas, descartando otros archivos',
-    !planillas.error && planillas.valor.length === 2
-    && planillas.valor.every((p) => p.nombre.indexOf('.pdf') < 0),
-    planillas.valor && planillas.valor.map((p) => p.nombre).join(', '));
-  revisar('ordena por fecha, la más nueva primero',
-    !planillas.error && planillas.valor[0].nombre === 'Planilla nueva');
-  revisar('listarPlanillas exige acceso por su cuenta',
-    !!intentar(() => gsSinAcceso.listarPlanillas()).error);
 
   // ── subirPlanilla ──
   // Es la única función que crea algo en Drive con lo que manda el navegador, así
