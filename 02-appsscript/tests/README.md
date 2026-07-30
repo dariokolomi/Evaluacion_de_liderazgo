@@ -20,9 +20,22 @@ node verificar-perfil.js        # Perfil.gs: las reglas de clasificación, escri
 node verificar-sintesis.js      # Sintesis.gs: el punto 5 y lo que se le manda al LLM
 ```
 
-Los seis verificadores de la app (`orquestador`, `webapp`, `metricas`, `radar`,
-`interfaz` y `perfil`) no necesitan volcados de Python: corren sin haber
+Los siete verificadores de la app (`orquestador`, `webapp`, `metricas`, `radar`,
+`interfaz`, `perfil` y `puesto`) no necesitan volcados de Python: corren sin haber
 ejecutado nada antes.
+
+## Verificar el punto 6
+
+`verificar-puesto.js` sigue la misma disciplina que `verificar-perfil.js`: los
+valores esperados están **escritos a mano**, calculados aparte. La tabla de
+puntajes está transcripta en el test, así que cambiarla en el código sin
+cambiarla acá pone algo en rojo — se probó moviendo el puntaje de "nivel medio
+donde el puesto pide alto" de 60 a 70, y falla.
+
+Lo que más importa que esté cubierto es la verificación de las citas: una
+exigencia que el modelo declara pero que no está textualmente en el perfil de
+puesto NO entra al índice y sale como alerta. Se probó desactivando esa
+comprobación y tres verificaciones se ponen en rojo.
 
 ## Verificar la interfaz
 

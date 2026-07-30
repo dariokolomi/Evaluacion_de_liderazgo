@@ -20,7 +20,7 @@ const CELDAS = path.join(__dirname, 'celdas-python.json');
 const ARCHIVOS_GS = [
   'Correccion.gs', 'Lectura.gs', 'Textos.gs', 'Perfil.gs', 'Documento.gs',
   'Radar.gs', 'Configuracion.gs', 'Acceso.gs', 'Historial.gs', 'Sintesis.gs',
-  'Progreso.gs', 'Informe.gs',
+  'Puesto.gs', 'Progreso.gs', 'Informe.gs',
 ];
 
 const CARPETA_INFORMES = 'carpeta-informes-id';
@@ -34,6 +34,7 @@ function crearEntorno(grillas, escenario) {
   const registro = {
     creados: [], trashed: [], convertidos: 0, exportados: [],
     archivosEnCarpeta: [], historial: [], cuerpo: null, grupoConsultado: null,
+    renombrados: [], propiedadesEscritas: {}, lock: { tomado: 0, suelto: 0 },
   };
 
   const propiedades = e.sinConfigurar ? {} : {
@@ -46,9 +47,14 @@ function crearEntorno(grillas, escenario) {
   const hojaDeGrilla = (filas) => ({
     getDataRange: () => ({ getValues: () => filas }),
     getLastRow: () => filas.length,
-    appendRow: (fila) => { registro.historial.push(fila); },
+    // Como una hoja de verdad: lo que se agrega queda EN la hoja. Sin esto,
+    // getLastRow sigue devolviendo 0 y el encabezado se vuelve a escribir en cada
+    // llamada, que es justo lo que este test tiene que poder detectar.
+    appendRow: (fila) => { filas.push(fila); registro.historial.push(fila); },
     setFrozenRows: () => {},
-    getRange: () => ({ setValues: () => {} }),
+    getMaxColumns: () => 26,
+    insertColumnsAfter: () => {},
+    getRange: () => ({ setValues: () => {}, getValues: () => [[]] }),
     newChart: () => constructorDeGrafico,
     insertChart: () => {},
     getCharts: () => [{ getAs: () => ({ setName: (n) => ({ nombre: n }) }) }],
@@ -92,8 +98,15 @@ function crearEntorno(grillas, escenario) {
   const DriveApp = {
     getFileById: (id) => ({
       getMimeType: () => (e.entradaEsSheet ? 'application/vnd.google-apps.spreadsheet' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
-      getName: () => 'Planilla de Preguntas - FM.xlsx',
+      // El perfil de puesto y la planilla son dos archivos distintos: el nombre
+      // importa porque de ahí sale la extensión al renombrarlos.
+      getName: () => (id === 'perfil-id' ? 'Perfil Scrum Master.pdf' : 'Planilla de Preguntas - FM.xlsx'),
       setTrashed: () => { registro.trashed.push(id); },
+      // El renombrado de los insumos, que corre después de guardar el informe.
+      setName: (nombre) => {
+        if (e.renombradoFalla) throw new Error('sin permiso para renombrar');
+        registro.renombrados.push({ id, nombre });
+      },
     }),
     getFolderById: (id) => ({
       createFile: (blob) => {
@@ -132,6 +145,17 @@ function crearEntorno(grillas, escenario) {
         getScriptProperties: () => ({
           getProperties: () => propiedades,
           getProperty: (clave) => propiedades[clave] || null,
+          // El contador de códigos vive acá: `reservarCodigo` lo lee y lo escribe.
+          setProperty: (clave, valor) => {
+            propiedades[clave] = valor;
+            registro.propiedadesEscritas[clave] = valor;
+          },
+        }),
+      },
+      LockService: {
+        getScriptLock: () => ({
+          waitLock: () => { registro.lock.tomado++; },
+          releaseLock: () => { registro.lock.suelto++; },
         }),
       },
       Session: { getActiveUser: () => ({ getEmail: () => USUARIO }), getScriptTimeZone: () => 'America/Argentina/Buenos_Aires' },
@@ -151,7 +175,10 @@ function crearEntorno(grillas, escenario) {
       Charts: { ChartType: { RADAR: 'RADAR' } },
       MimeType: { GOOGLE_SHEETS: 'application/vnd.google-apps.spreadsheet' },
       Utilities: {
-        formatDate: (fecha, zona, formato) => (formato === 'dd/MM/yyyy' ? '23/07/2026' : '20260723_181500'),
+        formatDate: (fecha, zona, formato) => {
+          if (formato === 'dd/MM/yyyy') return '23/07/2026';
+          return formato === 'yyyyMMdd-HHmm' ? '20260723-1815' : '20260723_181500';
+        },
       },
       console: { warn: () => {} },
     },
@@ -165,12 +192,15 @@ function cargarGs(globales) {
 }
 
 function correr(grillas, escenario) {
+  const e = escenario || {};
   const entorno = crearEntorno(grillas, escenario);
   const { generarInforme } = cargarGs(entorno.globales);
   let resultado = null;
   let error = null;
   try {
-    resultado = generarInforme({ planillaId: 'planilla-id', nombreEvaluado: 'Ana Pérez' });
+    resultado = generarInforme(Object.assign(
+      { planillaId: 'planilla-id', nombreEvaluado: 'Ana Pérez' }, e.pedido || {}
+    ));
   } catch (ex) {
     error = ex;
   }
@@ -193,7 +223,7 @@ function main() {
   const feliz = correr(completa);
   revisar('genera el informe sin errores', !feliz.error, feliz.error && feliz.error.message);
   revisar('devuelve el .docx con su nombre y su URL',
-    !!feliz.resultado && feliz.resultado.nombreArchivo === 'INFORME_Ana Pérez_20260723_181500.docx'
+    !!feliz.resultado && feliz.resultado.nombreArchivo === 'A01-INFORME Ana Pérez 20260723-1815.docx'
     && feliz.resultado.informeUrl.indexOf('drive.google.com') >= 0,
     feliz.resultado && JSON.stringify(feliz.resultado));
   revisar('deja el archivo en la carpeta configurada',
@@ -218,10 +248,70 @@ function main() {
     JSON.stringify(feliz.registro.historial));
   const fila = feliz.registro.historial[1] || [];
   revisar('el historial guarda evaluado, planilla, informe y usuario',
-    fila[1] === 'Ana Pérez' && fila[2] === 'Planilla de Preguntas - FM.xlsx'
+    fila[1] === 'Ana Pérez' && fila[2] === 'A01-PLANILLA Ana Pérez.xlsx'
     && String(fila[3]).indexOf('drive.google.com') >= 0 && fila[4] === USUARIO,
     JSON.stringify(fila));
   revisar('deja la calificación vacía para quien revise', fila[6] === '' && fila[7] === '');
+
+  // ── Con perfil de puesto: el punto 6 ──
+  // La lectura del puesto ya viene hecha (se hace al subir el archivo), así que
+  // acá se le pasa como la manda el navegador. Sin clave de LLM configurada, la
+  // prosa del punto 6 sale determinista y los números salen igual: es justo lo que
+  // tiene que poder verificarse.
+  const conPuesto = correr(completa, { pedido: { puesto: {
+    id: 'perfil-id',
+    nombre: 'Perfil Scrum Master.pdf',
+    puesto: 'Scrum Master',
+    exigencias: [
+      { dimension: 'Carisma / Influencia Idealizada', nivelRequerido: 'Alto', critica: true, cita: 'Guiar y motivar' },
+      { dimension: 'Liderazgo Directivo', nivelRequerido: 'Alto', critica: true, cita: 'Establecer metas claras' },
+      { dimension: 'Laissez-Faire', nivelRequerido: 'Bajo', critica: false, cita: 'Eliminar obstáculos' },
+    ],
+    descartadas: [],
+    noMedidos: [{ requisito: 'Título universitario', cita: 'Título universitario' }],
+  } } });
+
+  revisar('con perfil de puesto, el informe se genera igual', !conPuesto.error,
+    conPuesto.error && conPuesto.error.message);
+  revisar('y lo declara con su índice de adecuación',
+    !!conPuesto.resultado && conPuesto.resultado.conPuesto === true
+    && typeof conPuesto.resultado.adecuacion === 'number'
+    && conPuesto.resultado.adecuacion >= 0 && conPuesto.resultado.adecuacion <= 100,
+    conPuesto.resultado && JSON.stringify(conPuesto.resultado.adecuacion));
+  const textoDelInforme = conPuesto.registro.cuerpo.bloques
+    .map((b) => (b.tramos || []).map((t) => t.texto).join(''))
+    .join('\n');
+  revisar('el documento trae el punto 6',
+    textoDelInforme.indexOf('6. Contraste con el Perfil de Puesto') >= 0);
+  revisar('con el índice, las alertas y el plan de desarrollo',
+    textoDelInforme.indexOf('Índice de adecuación: ') >= 0
+    && textoDelInforme.indexOf('6.2 Alertas sobre el índice') >= 0
+    && textoDelInforme.indexOf('6.5 Plan Personalizado de Desarrollo') >= 0);
+  revisar('y la nota que aclara que los números los calcula el sistema',
+    /los calcula el sistema/.test(textoDelInforme));
+  revisar('los tres archivos de la evaluación quedan con el mismo código',
+    conPuesto.registro.renombrados.length === 2
+    && conPuesto.registro.renombrados.some((r) => r.nombre === 'A01-PLANILLA Ana Pérez.xlsx')
+    && conPuesto.registro.renombrados.some((r) => r.nombre === 'A01-PERFIL Scrum Master.pdf'),
+    JSON.stringify(conPuesto.registro.renombrados));
+  const filaPuesto = conPuesto.registro.historial.filter((f) => f[0] !== 'Fecha')[0] || [];
+  revisar('y el historial guarda el código y el perfil de puesto usado',
+    filaPuesto[8] === 'A01' && filaPuesto[9] === 'A01-PERFIL Scrum Master.pdf',
+    JSON.stringify(filaPuesto));
+
+  // Sin perfil de puesto no hay punto 6: no queda una sección vacía ni un "no aplica".
+  const textoSinPuesto = feliz.registro.cuerpo.bloques
+    .map((b) => (b.tramos || []).map((t) => t.texto).join(''))
+    .join('\n');
+  revisar('sin perfil de puesto el informe termina en el punto 5',
+    textoSinPuesto.indexOf('6. Contraste con el Perfil de Puesto') === -1
+    && feliz.resultado.conPuesto === false);
+
+  // Una lectura del puesto que no trae nada usable no rompe: sale sin punto 6.
+  const puestoVacio = correr(completa, { pedido: { puesto: { id: 'perfil-id', exigencias: [] } } });
+  revisar('un perfil de puesto sin exigencias utilizables no rompe el informe',
+    !puestoVacio.error && puestoVacio.resultado.conPuesto === false,
+    puestoVacio.error && puestoVacio.error.message);
 
   // ── Entrada que ya es un Google Sheet ──
   const yaSheet = correr(completa, { entradaEsSheet: true });
@@ -239,6 +329,8 @@ function main() {
     incompleta.error && incompleta.error.message.slice(0, 70));
   revisar('sin dejar archivos en la carpeta de informes', incompleta.registro.archivosEnCarpeta.length === 0);
   revisar('sin registrar la corrida', incompleta.registro.historial.length === 0);
+  revisar('y sin gastar un código: la planilla ni siquiera se pudo corregir',
+    Object.keys(incompleta.registro.propiedadesEscritas).length === 0);
   revisar('y descartando lo que había creado',
     incompleta.registro.trashed.indexOf('copia-convertida') >= 0);
 
@@ -265,7 +357,17 @@ function main() {
   revisar('si falla la exportación, corta con el código de error',
     !!exportRoto.error && exportRoto.error.message.indexOf('500') > 0,
     exportRoto.error && exportRoto.error.message);
-  revisar('sin registrar la corrida', exportRoto.registro.historial.length === 0);
+  // El código YA se reservó cuando falla la exportación: se pide antes de componer
+  // el documento porque el nombre del archivo lo lleva. Ese número queda salteado,
+  // que es la decisión tomada en `reservarCodigo`: un hueco es inofensivo, un
+  // código repetido en dos informes archivados no se arregla nunca.
+  revisar('sin registrar la corrida',
+    exportRoto.registro.historial.filter((f) => f[0] !== 'Fecha').length === 0,
+    JSON.stringify(exportRoto.registro.historial));
+  revisar('el código reservado queda salteado, no se devuelve al contador',
+    exportRoto.registro.propiedadesEscritas.ULTIMO_CODIGO === '1');
+  revisar('y no se renombra ningún insumo: el informe no llegó a existir',
+    exportRoto.registro.renombrados.length === 0);
   revisar('y descartando igual los temporales',
     exportRoto.registro.trashed.indexOf('doc-temporal') >= 0
     && exportRoto.registro.trashed.indexOf('copia-convertida') >= 0);

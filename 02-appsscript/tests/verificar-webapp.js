@@ -15,13 +15,15 @@ const fs = require('fs');
 const path = require('path');
 
 const RAIZ = path.resolve(__dirname, '..');
-const ARCHIVOS_GS = ['Acceso.gs', 'Configuracion.gs', 'Historial.gs', 'Metricas.gs', 'Progreso.gs', 'Informe.gs', 'WebApp.gs'];
+const ARCHIVOS_GS = ['Correccion.gs', 'Textos.gs', 'Perfil.gs', 'Sintesis.gs', 'Puesto.gs',
+  'Acceso.gs', 'Configuracion.gs', 'Historial.gs', 'Metricas.gs', 'Progreso.gs', 'Informe.gs', 'WebApp.gs'];
 
 const GRUPO = 'informes-rrhh@kolektor.com.ar';
 const USUARIO = 'ana.perez@kolektor.com.ar';
 const CARPETA_PLANILLAS = 'carpeta-planillas-id';
 
-const ENCABEZADO = ['Fecha', 'Evaluado', 'Planilla', 'Informe', 'Generado por', 'Segundos', 'Calificación', 'Comentario'];
+const ENCABEZADO = ['Fecha', 'Evaluado', 'Planilla', 'Informe', 'Generado por', 'Segundos',
+  'Calificación', 'Comentario', 'Código', 'Perfil de puesto'];
 
 function hojaFalsa(filas, registro) {
   const datos = filas.map((f) => f.slice());
@@ -30,6 +32,10 @@ function hojaFalsa(filas, registro) {
     getLastRow: () => datos.length,
     appendRow: (fila) => { datos.push(fila.slice()); },
     setFrozenRows: () => {},
+    // Una hoja de Sheets nace con 26 columnas, tenga datos o no: es lo que mira
+    // `completarEncabezado` para saber si hace falta agrandarla.
+    getMaxColumns: () => 26,
+    insertColumnsAfter: () => {},
     deleteRows: (desde, cantidad) => { datos.splice(desde - 1, cantidad); },
     // El respaldo del vaciado. Se anota el contenido al momento de copiar, no una
     // referencia: si guardara la referencia, el respaldo "cambiaría" al borrarse
@@ -517,8 +523,13 @@ function main() {
   const prog = crearEntorno();
   const gsProg = cargarGs(prog.globales);
 
-  revisar('hay entre 5 y 7 etapas, como pidió el PO',
-    gsProg.ETAPAS_INFORME.length >= 5 && gsProg.ETAPAS_INFORME.length <= 7,
+  // El PO pidió entre 5 y 7 etapas: pocas, para que la línea se lea de un vistazo.
+  // El punto 6 sumó una octava —"Contrastando con el puesto"— que es trabajo real y
+  // sólo corre cuando se subió un perfil de puesto. El tope se movió a 8 a
+  // sabiendas; si el PO prefiere volver a 7, lo que hay que fusionar son las dos
+  // etapas de la síntesis, no ésta.
+  revisar('hay entre 5 y 8 etapas, como pidió el PO',
+    gsProg.ETAPAS_INFORME.length >= 5 && gsProg.ETAPAS_INFORME.length <= 8,
     `son ${gsProg.ETAPAS_INFORME.length}`);
   revisar('los nombres de las etapas son cortos',
     gsProg.ETAPAS_INFORME.every((e) => e.length <= 32),

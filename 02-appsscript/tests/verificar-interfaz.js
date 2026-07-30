@@ -58,6 +58,29 @@ function main() {
     /function subiendo\(activo\)[\s\S]{0,400}\$\('generar'\)\.disabled = activo/.test(js));
   revisar('al servidor va el base64 sin el prefijo data:',
     /String\(lector\.result\)\.split\(','\)\[1\]/.test(js));
+
+  // ── Subida del perfil de puesto ──
+  revisar('hay un botón para subir el perfil de puesto', ids.has('subir-puesto'));
+  revisar('y su propio input de archivo', ids.has('archivo-puesto'));
+  revisar('el input del perfil también va escondido detrás de su botón',
+    /id="archivo-puesto"[^>]*class="oculto"/.test(marcado));
+  revisar('y limita la elección a documentos, no a planillas',
+    /id="archivo-puesto"[^>]*accept="\.pdf,\.docx,\.doc"/.test(marcado));
+  revisar('el perfil de puesto se anuncia como opcional: sin él el informe sale igual',
+    /Perfil de puesto[\s\S]{0,120}\(opcional\)/.test(marcado));
+  revisar('mientras se lee el perfil, generar queda bloqueado',
+    /function subiendoPuesto\(activo\)[\s\S]{0,400}\$\('generar'\)\.disabled = activo/.test(js));
+  revisar('lo que el sistema entendió del puesto se muestra antes de generar',
+    ids.has('puesto-elegido')
+    && /exigencia\(s\) reconocidas/.test(js));
+  revisar('y también lo que descartó, que es lo que después sale como alerta',
+    /Sin usar, porque el documento no las sostiene/.test(js));
+  revisar('la lectura del puesto viaja en el pedido de generación',
+    /generarDesdeInterfaz\(\{[\s\S]{0,400}puesto: puestoElegido/.test(js));
+  revisar('y se limpia al terminar: es de esta evaluación, no de la próxima',
+    /puestoElegido = null;[\s\S]{0,80}mostrarPuestoElegido\(\);[\s\S]{0,60}cargarHistorial\(\)/.test(js));
+  revisar('el historial muestra el código de cada evaluación',
+    /<th>Código<\/th>/.test(marcado) && /corrida\.codigo/.test(js));
   // La subida es la única fuente de planilla: no hay desplegable ni se le pide
   // al servidor la lista de la carpeta.
   revisar('no hay un desplegable para elegir entre las planillas de la carpeta',

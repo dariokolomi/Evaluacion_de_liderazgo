@@ -614,14 +614,39 @@ function brechasDeDesarrollo(neo, cel, cam, con) {
  * @return {Array<Array<string>>} filas [competencia, fundamento, acción], numeradas.
  */
 function competenciasADesarrollar(neo, cel, cam, con, perfil) {
+  var competencias = competenciasConClave(neo, cel, cam, con, perfil);
+  // La fila de "sin brechas" no se numera: es una sola y un "1." adelante haría
+  // parecer que hay una lista.
+  if (competencias.length === 1 && competencias[0].sinBrechas) return [competencias[0].fila];
+  return competencias.map(function (c, i) {
+    return [(i + 1) + '. ' + c.fila[0], c.fila[1], c.fila[2]];
+  });
+}
+
+/**
+ * Las mismas competencias, sin numerar y con las dimensiones que cada una toca.
+ *
+ * Existe para el punto 6: el plan de desarrollo contra el perfil de puesto tiene
+ * que poner adelante las competencias que corresponden a lo que el puesto exige,
+ * y para eso necesita saber de qué dimensión sale cada fila. La numeración se
+ * arma afuera porque ahí depende de cuántas filas se muestren.
+ *
+ * Las claves son las de `catalogoDeExigibles` (Puesto.gs), que a su vez salen de
+ * `SINTESIS_ETIQUETAS` y del NEO. Un catálogo aparte para el punto 6 terminaría
+ * recomendando cosas distintas que la sección 3 para la misma brecha.
+ *
+ * @return {Array<Object>} [{claves, fila: [competencia, fundamento, acción]}]
+ */
+function competenciasConClave(neo, cel, cam, con, perfil) {
   var b = brechasDeDesarrollo(neo, cel, cam, con);
   var filas = [];
+  function agregar(claves, fila) { filas.push({ claves: claves, fila: fila }); }
 
   if (b.laissez) {
     // La Amabilidad se nombra sólo si está alta. El fundamento decía "Alta
     // Amabilidad (T=…)" con T=30 y todo, que es lo contrario de alta.
     var amabilidadAlta = neo.nivel.A === 'Alto' || neo.nivel.A === 'Muy Alto';
-    filas.push(['Reducir episodios de Laissez-Faire',
+    agregar(['Laissez'], ['Reducir episodios de Laissez-Faire',
       'P' + cel.Laissez + ': tendencia a la no-intervención.'
         + (amabilidadAlta
           ? ' Amabilidad ' + neo.nivel.A.toLowerCase().replace('alto', 'alta')
@@ -631,7 +656,7 @@ function competenciasADesarrollar(neo, cel, cam, con, perfil) {
   }
 
   if (b.directivo) {
-    filas.push(['Fortalecer el Liderazgo Directivo',
+    agregar(['Dir'], ['Fortalecer el Liderazgo Directivo',
       'P' + cam.Dir + ': ' + (perfil.menosDesarrollado.nombre === 'Directivo'
         ? 'el menos desarrollado del perfil'
         : 'nivel ' + nivelPorPercentil(cam.Dir).toLowerCase())
@@ -640,7 +665,7 @@ function competenciasADesarrollar(neo, cel, cam, con, perfil) {
   }
 
   if (b.recompensa) {
-    filas.push(['Incrementar la Recompensa Contingente',
+    agregar(['RecCont'], ['Incrementar la Recompensa Contingente',
       'P' + cel.RecCont + ': nivel ' + nivelPorPercentil(cel.RecCont).toLowerCase()
         + '. El buen desempeño puede no sentirse sistemáticamente reconocido.',
       'Implementar reconocimiento contingente explícito. Formalizar acuerdos de desempeño + recompensa.']);
@@ -651,15 +676,16 @@ function competenciasADesarrollar(neo, cel, cam, con, perfil) {
     // que correspondan. Con las dos, la fila queda igual que la del informe original.
     var cuales = [];
     if (b.carisma) {
-      cuales.push({ nombre: 'Carisma', percentil: cel.Carisma, rasgo: 'influencia simbólica',
+      cuales.push({ clave: 'Carisma', nombre: 'Carisma', percentil: cel.Carisma, rasgo: 'influencia simbólica',
         accion: 'Entrenamiento en storytelling y relato de propósito.' });
     }
     if (b.estimInt) {
-      cuales.push({ nombre: 'Estimulación Intelectual', percentil: cel.EstimInt,
+      cuales.push({ clave: 'EstimInt', nombre: 'Estimulación Intelectual', percentil: cel.EstimInt,
         rasgo: 'cuestionamiento analítico',
         accion: 'Incorporar desafíos intelectuales al equipo.' });
     }
-    filas.push(['Desarrollar ' + enumerar(cuales.map(function (c) { return c.nombre; })),
+    agregar(cuales.map(function (c) { return c.clave; }),
+      ['Desarrollar ' + enumerar(cuales.map(function (c) { return c.nombre; })),
       enumerar(cuales.map(function (c) {
         return c.nombre + ' P' + c.percentil + ' (nivel ' + nivelPorPercentil(c.percentil).toLowerCase() + ')';
       })) + ': ' + enumerar(cuales.map(function (c) { return c.rasgo; }))
@@ -671,14 +697,14 @@ function competenciasADesarrollar(neo, cel, cam, con, perfil) {
     // "sostener el estilo Considerado" sólo si el Considerado está alto: era otro
     // supuesto del informe viejo, que daba ese estilo por sentado.
     var sostiene = nivelPorPercentil(cam.Cons) === 'Alto' ? 'el estilo Considerado' : 'el rol';
-    filas.push(['Gestionar la autorregulación emocional',
+    agregar(['N'], ['Gestionar la autorregulación emocional',
       'Neuroticismo T=' + neo.t.N + ' (' + neo.nivel.N + '): base para sostener '
         + sostiene + ' sin agotamiento.',
       'Técnicas de gestión del estrés. Establecer rutinas de recuperación. Coaching ejecutivo.']);
   }
 
   if (b.autorregulacion || b.cambio) {
-    filas.push(['Resiliencia y Gestión del Cambio',
+    agregar(['N', 'Camb'], ['Resiliencia y Gestión del Cambio',
       'Neuroticismo T=' + neo.t.N + ' (' + neo.nivel.N + ') y Conductas de Cambio P'
         + con.Camb + ': la capacidad de mantener la calma bajo presión y gestionar la '
         + 'incertidumbre es clave para liderar transformaciones sostenidas.',
@@ -689,15 +715,13 @@ function competenciasADesarrollar(neo, cel, cam, con, perfil) {
   // una fila que lo dice— para no dejar un encabezado suelto, y en los mismos
   // términos que ya usa el punto 5 para este caso.
   if (!filas.length) {
-    filas.push(['Sin competencias con brecha',
+    agregar([], ['Sin competencias con brecha',
       'Ninguna dimensión queda por debajo del corte de desarrollo que aplica el punto 5.',
       'Sostener el perfil actual y profundizar las fortalezas identificadas.']);
-    return filas;
+    filas[0].sinBrechas = true;
   }
 
-  return filas.map(function (fila, i) {
-    return [(i + 1) + '. ' + fila[0], fila[1], fila[2]];
-  });
+  return filas;
 }
 
 // ═══════════════════════════════════════════════════════════════════

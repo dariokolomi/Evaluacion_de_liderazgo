@@ -15,9 +15,16 @@
 
 var HISTORIAL_HOJA = 'Corridas';
 
+/**
+ * OJO CON EL ORDEN: las columnas nuevas van AL FINAL, nunca en el medio.
+ * `COL_CALIFICACION` y `COL_COMENTARIO` son posiciones fijas y `Metricas.gs` lee
+ * por índice; insertar una columna adelante correría las calificaciones ya
+ * cargadas sin que nada avise. Los historiales existentes se completan solos: las
+ * filas viejas quedan con las celdas nuevas vacías.
+ */
 var HISTORIAL_COLUMNAS = [
   'Fecha', 'Evaluado', 'Planilla', 'Informe', 'Generado por',
-  'Segundos', 'Calificación', 'Comentario'
+  'Segundos', 'Calificación', 'Comentario', 'Código', 'Perfil de puesto'
 ];
 
 /** Devuelve la hoja de corridas, creándola con su encabezado si hace falta. */
@@ -30,8 +37,33 @@ function hojaDeHistorial(historialId) {
   if (hoja.getLastRow() === 0) {
     hoja.appendRow(HISTORIAL_COLUMNAS);
     hoja.setFrozenRows(1);
+    return hoja;
   }
+  completarEncabezado(hoja);
   return hoja;
+}
+
+/**
+ * Completa el encabezado de un historial creado antes de que existieran las
+ * columnas nuevas.
+ *
+ * No toca ninguna fila de datos: sólo escribe los rótulos que faltan. Sin esto,
+ * las corridas nuevas escribirían el código en una columna sin nombre y quien
+ * abriera la planilla vería dos columnas sueltas sin saber qué son.
+ */
+function completarEncabezado(hoja) {
+  if (hoja.getMaxColumns() < HISTORIAL_COLUMNAS.length) {
+    hoja.insertColumnsAfter(hoja.getMaxColumns(),
+      HISTORIAL_COLUMNAS.length - hoja.getMaxColumns());
+  }
+  var rango = hoja.getRange(1, 1, 1, HISTORIAL_COLUMNAS.length);
+  var actual = rango.getValues()[0];
+  var faltan = false;
+  for (var i = 0; i < HISTORIAL_COLUMNAS.length; i++) {
+    if (!actual[i]) faltan = true;
+  }
+  if (!faltan) return;
+  rango.setValues([HISTORIAL_COLUMNAS]);
 }
 
 var COL_CALIFICACION = 7;
@@ -39,7 +71,8 @@ var COL_COMENTARIO = 8;
 
 /**
  * Registra una corrida.
- * @param {Object} corrida {fecha, evaluado, planilla, informeUrl, usuario, segundos}
+ * @param {Object} corrida {fecha, evaluado, planilla, informeUrl, usuario, segundos,
+ *   codigo, perfilPuesto}
  */
 function registrarCorrida(historialId, corrida) {
   hojaDeHistorial(historialId).appendRow([
@@ -50,7 +83,9 @@ function registrarCorrida(historialId, corrida) {
     corrida.usuario,
     corrida.segundos,
     '', // la calificación la carga después quien revisa el informe
-    ''
+    '',
+    corrida.codigo || '',
+    corrida.perfilPuesto || ''
   ]);
 }
 
@@ -78,7 +113,9 @@ function leerCorridas(historialId, limite) {
       usuario: fila[4],
       segundos: fila[5],
       calificacion: fila[6],
-      comentario: fila[7]
+      comentario: fila[7],
+      codigo: fila[8],
+      perfilPuesto: fila[9]
     };
   }).reverse();
 }
@@ -169,6 +206,86 @@ function compararHistorialConDrive(historialId, carpetaId, limite) {
     sinFila: sinFila,
     sinUrl: sinUrl
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// El código de cada evaluación
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Contador de códigos. Vive en las Propiedades del script y no en la planilla.
+ *
+ * POR QUÉ NO CONTAR LAS FILAS DEL HISTORIAL, que sería lo obvio: el código se
+ * necesita ANTES de registrar la corrida —va en el nombre del archivo— y la fila
+ * se escribe al final. Contar filas daría el mismo número a dos informes que se
+ * generan a la vez, y el nombre del archivo es justamente donde un duplicado
+ * duele: dos evaluaciones distintas con el mismo código en la carpeta.
+ */
+var PROP_ULTIMO_CODIGO = 'ULTIMO_CODIGO';
+
+/** Cuántos códigos entran con una letra: A01…A99. Después sigue B01. */
+var CODIGOS_POR_LETRA = 99;
+
+/**
+ * El código correlativo número n: 1 → A01, 99 → A99, 100 → B01.
+ *
+ * Pasada la Z sigue con dos letras (AA01), que es un caso que no va a llegar
+ * —son 2574 evaluaciones— pero que si llegara no puede devolver un código roto ni
+ * repetir uno viejo.
+ */
+function codigoDeNumero(n) {
+  var indice = Math.floor((n - 1) / CODIGOS_POR_LETRA);
+  var numero = ((n - 1) % CODIGOS_POR_LETRA) + 1;
+  return letrasDeIndice(indice) + (numero < 10 ? '0' : '') + numero;
+}
+
+/** 0 → A, 25 → Z, 26 → AA, 27 → AB. */
+function letrasDeIndice(indice) {
+  var letras = '';
+  var n = indice;
+  do {
+    letras = String.fromCharCode(65 + (n % 26)) + letras;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return letras;
+}
+
+/**
+ * Reserva el próximo código y lo devuelve.
+ *
+ * Toma el lock por lo mismo que `calificarCorrida`: es un leer-sumar-escribir, y
+ * dos corridas simultáneas leerían el mismo número. Es el único lugar donde un
+ * duplicado no se puede arreglar después.
+ *
+ * La primera vez, el contador se siembra con las corridas que ya hay: así el
+ * historial existente no se pisa y los códigos siguen desde donde corresponde.
+ *
+ * SI LA CORRIDA FALLA DESPUÉS DE RESERVAR, ese código queda salteado. Es a
+ * propósito: un hueco en la secuencia es inofensivo —se ve y se explica—, y un
+ * código repetido en dos informes archivados no se arregla nunca.
+ */
+function reservarCodigo(historialId) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(ESPERA_LOCK_MS);
+  } catch (e) {
+    throw new Error('Hay otra generación en curso. Probá de nuevo en unos segundos.');
+  }
+
+  try {
+    var propiedades = PropertiesService.getScriptProperties();
+    // El crudo se mira antes de convertir: `Number(null)` es 0, así que preguntar
+    // por el número no distingue "todavía no hay contador" de "va por el cero", y
+    // el historial existente se pisaría desde A01.
+    var crudo = propiedades.getProperty(PROP_ULTIMO_CODIGO);
+    var guardado = crudo ? Number(crudo) : NaN;
+    var ultimo = guardado >= 0 ? guardado : contarCorridas(historialId);
+    var siguiente = ultimo + 1;
+    propiedades.setProperty(PROP_ULTIMO_CODIGO, String(siguiente));
+    return codigoDeNumero(siguiente);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 var HOJA_RESPALDO_PREFIJO = 'Corridas-respaldo-';

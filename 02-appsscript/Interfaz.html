@@ -276,6 +276,19 @@
           <label for="evaluado">Persona evaluada</label>
           <input type="text" id="evaluado" placeholder="Nombre y apellido" autocomplete="off">
         </div>
+        <div>
+          <!-- El perfil de puesto es OPCIONAL: con él, el informe suma el punto 6
+               —contraste contra lo que el puesto exige—; sin él, sale con las
+               cinco secciones de siempre. Se dice en la ayuda para que nadie
+               piense que falta completar algo. -->
+          <label for="subir-puesto">Perfil de puesto <span class="ayuda">(opcional)</span></label>
+          <div class="bajo-campo">
+            <button type="button" id="subir-puesto" class="secundario chico">Subir perfil de puesto…</button>
+            <span class="ayuda">.pdf, .docx o .doc — agrega el punto 6</span>
+          </div>
+          <div id="puesto-elegido" class="ayuda elegida"></div>
+          <input type="file" id="archivo-puesto" class="oculto" accept=".pdf,.docx,.doc">
+        </div>
       </div>
       <div class="acciones">
         <button id="generar" disabled>Generar informe</button>
@@ -297,12 +310,12 @@
       <table>
         <thead>
           <tr>
-            <th>Fecha</th><th>Evaluado</th><th>Informe</th>
+            <th>Código</th><th>Fecha</th><th>Evaluado</th><th>Informe</th>
             <th>Generado por</th><th>Calificación</th>
           </tr>
         </thead>
         <tbody id="historial">
-          <tr><td colspan="5" class="vacio">Cargando…</td></tr>
+          <tr><td colspan="6" class="vacio">Cargando…</td></tr>
         </tbody>
       </table>
     </section>
@@ -486,18 +499,99 @@
       subirArchivo(archivo);
     });
 
+    // ── Subida del perfil de puesto ───────────────────────────────
+    // Subirlo NO es sólo copiar un archivo: el servidor lo lee y devuelve qué
+    // dimensiones entendió que el puesto exige. Por eso tarda —son segundos, no
+    // instantáneo— y por eso se muestra el resultado: es el momento en que
+    // todavía se puede corregir el documento y volver a subirlo.
+
+    /** El perfil de puesto leído, o null si no se subió ninguno. */
+    let puestoElegido = null;
+
+    function subiendoPuesto(activo) {
+      $('subir-puesto').disabled = activo;
+      $('subir-puesto').textContent = activo ? 'Leyendo el perfil…' : 'Subir perfil de puesto…';
+      // Generar se bloquea mientras se lee el perfil: si no, se puede arrancar un
+      // informe que iba a llevar punto 6 y sale sin él.
+      $('generar').disabled = activo || !planillaElegida;
+    }
+
+    function mostrarPuestoElegido() {
+      if (!puestoElegido) {
+        $('puesto-elegido').replaceChildren();
+        return;
+      }
+      const partes = [];
+      const titulo = document.createElement('div');
+      titulo.textContent = 'Cargado: ' + (puestoElegido.puesto || puestoElegido.nombre);
+      partes.push(titulo);
+
+      const detalle = document.createElement('div');
+      detalle.textContent = puestoElegido.exigencias.length + ' exigencia(s) reconocidas: '
+        + puestoElegido.exigencias.map((e) => e.dimension + ' (' + e.nivelRequerido + ')').join(', ');
+      partes.push(detalle);
+
+      // Lo descartado se muestra: es lo que va a salir como alerta en el informe,
+      // y verlo acá permite corregir el perfil de puesto antes de generarlo.
+      if (puestoElegido.descartadas && puestoElegido.descartadas.length) {
+        const descartes = document.createElement('div');
+        descartes.textContent = 'Sin usar, porque el documento no las sostiene: '
+          + puestoElegido.descartadas.map((d) => d.dimension).join(', ') + '.';
+        partes.push(descartes);
+      }
+      $('puesto-elegido').replaceChildren(...partes);
+    }
+
+    function subirPerfil(archivo) {
+      const lector = new FileReader();
+      lector.onerror = () => {
+        subiendoPuesto(false);
+        mostrarAviso('error', ['No se pudo leer el archivo de la máquina.']);
+      };
+      lector.onload = () => {
+        const datosBase64 = String(lector.result).split(',')[1] || '';
+        google.script.run
+          .withSuccessHandler((puesto) => {
+            puestoElegido = puesto;
+            mostrarPuestoElegido();
+            subiendoPuesto(false);
+            mostrarAviso('ok', ['Perfil de puesto leído: '
+              + (puesto.puesto || puesto.nombre) + '. El informe va a incluir el punto 6.']);
+          })
+          .withFailureHandler((e) => {
+            puestoElegido = null;
+            mostrarPuestoElegido();
+            subiendoPuesto(false);
+            mostrarAviso('error', [e.message]);
+          })
+          .subirPerfilDePuesto({ nombre: archivo.name, datosBase64: datosBase64 });
+      };
+      lector.readAsDataURL(archivo);
+    }
+
+    $('subir-puesto').addEventListener('click', () => $('archivo-puesto').click());
+
+    $('archivo-puesto').addEventListener('change', (evento) => {
+      const archivo = evento.target.files[0];
+      evento.target.value = '';
+      if (!archivo) return;
+      subiendoPuesto(true);
+      $('resultado').replaceChildren();
+      subirPerfil(archivo);
+    });
+
     function cargarHistorial() {
       google.script.run
         .withSuccessHandler((corridas) => {
           const cuerpo = $('historial');
           if (!corridas.length) {
-            cuerpo.replaceChildren(fila(['Todavía no se generó ningún informe'], 'vacio', 5));
+            cuerpo.replaceChildren(fila(['Todavía no se generó ningún informe'], 'vacio', 6));
             return;
           }
           cuerpo.replaceChildren(...corridas.map(filaDeCorrida));
         })
         .withFailureHandler((e) => {
-          $('historial').replaceChildren(fila([e.message], 'vacio', 5));
+          $('historial').replaceChildren(fila([e.message], 'vacio', 6));
         })
         .listarHistorial(25);
     }
@@ -514,7 +608,9 @@
 
     function filaDeCorrida(corrida) {
       const tr = document.createElement('tr');
-      [corrida.fecha, corrida.evaluado].forEach((texto) => {
+      // El código va primero: es como se nombran los archivos en Drive, así que es
+      // por donde se busca una evaluación cuando se llega desde la carpeta.
+      [corrida.codigo || '—', corrida.fecha, corrida.evaluado].forEach((texto) => {
         const td = document.createElement('td');
         td.textContent = texto;
         tr.appendChild(td);
@@ -698,7 +794,21 @@
               + 'redactar la síntesis — ' + (r.sintesisMotivo || 'motivo no informado') + '.';
             $('resultado').appendChild(nota);
           }
+          // El punto 6 puede salir con la prosa fija por las mismas razones que el
+          // punto 5 (sin tiempo, sin clave, respuesta inválida). Los números y las
+          // tablas no dependen de eso, pero conviene saberlo antes de mandarlo.
+          if (r.conPuesto) {
+            const nota = document.createElement('div');
+            nota.className = 'aviso ok';
+            nota.textContent = 'Punto 6 incluido — índice de adecuación: '
+              + (r.adecuacion === null ? 'no calculable' : r.adecuacion + ' %') + '.';
+            $('resultado').appendChild(nota);
+          }
           $('evaluado').value = '';
+          // El perfil de puesto se limpia: es de esta evaluación, y dejarlo cargado
+          // haría que el próximo informe salga contra un puesto que nadie eligió.
+          puestoElegido = null;
+          mostrarPuestoElegido();
           cargarHistorial();
         })
         .withFailureHandler((e) => {
@@ -707,7 +817,15 @@
           $('cargando').classList.add('oculto');
           mostrarAviso('error', [e.message]);
         })
-        .generarDesdeInterfaz({ planillaId: planillaId, nombreEvaluado: nombre, token: token });
+        .generarDesdeInterfaz({
+          planillaId: planillaId,
+          nombreEvaluado: nombre,
+          token: token,
+          // Viaja la lectura entera, no el id del archivo: leerla de nuevo sería
+          // otra llamada al modelo adentro de la corrida, que es justo lo que no
+          // entra en los seis minutos. El servidor la vuelve a sanear igual.
+          puesto: puestoElegido
+        });
     });
 
     $('cancelar').addEventListener('click', () => $('dialogo').close());
