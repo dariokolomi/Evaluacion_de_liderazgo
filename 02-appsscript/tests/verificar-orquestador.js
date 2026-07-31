@@ -191,6 +191,31 @@ function cargarGs(globales) {
   return new Function(...nombres, `${fuente}\nreturn { generarInforme };`)(...nombres.map((n) => globales[n]));
 }
 
+/**
+ * La misma planilla, con sus cinco hojas, pero sin ninguna respuesta cargada.
+ *
+ * ANTES ESTO SALÍA DE UN ARCHIVO: `Planilla de Preguntas (1).xlsx`, una copia en
+ * blanco que se quitó del repositorio en «Quitar la copia duplicada de la
+ * planilla de preguntas». El test siguió pasando meses porque `celdas-python.json`
+ * es un volcado local que nadie regeneró; en cuanto se regenera, la planilla no
+ * está y el test se cae de entrada, antes de la primera verificación. Derivarla
+ * de la completa no depende de ningún archivo y dice en el código qué se prueba.
+ *
+ * Se conserva la primera columna —el enunciado, que es de donde sale el número de
+ * ítem— y se vacía todo lo demás. Se vacían TODAS las otras columnas y no la de
+ * respuesta de cada hoja porque la columna cambia según el instrumento (NEO la 2,
+ * CELID-A la 4, las otras tres la 3): copiar ese mapa acá lo dejaría desactualizado
+ * el día que cambie en `Lectura.gs`. Conservando los ítems, el motor falla con
+ * "faltan los ítems…", que es el caso que interesa, y no con "hoja vacía".
+ */
+function sinRespuestas(grillas) {
+  const vacias = {};
+  for (const hoja of Object.keys(grillas)) {
+    vacias[hoja] = grillas[hoja].map((fila) => fila.map((v, i) => (i === 0 ? v : '')));
+  }
+  return vacias;
+}
+
 function correr(grillas, escenario) {
   const e = escenario || {};
   const entorno = crearEntorno(grillas, escenario);
@@ -213,8 +238,14 @@ function main() {
     return 1;
   }
   const volcados = JSON.parse(fs.readFileSync(CELDAS, 'utf8'));
-  const completa = volcados.find((v) => v.planilla.includes('Chavo.xlsx')).grillas;
-  const enBlanco = volcados.find((v) => v.planilla.includes('(1)')).grillas;
+  const volcadoCompleto = volcados.find((v) => v.planilla.includes('Chavo.xlsx'));
+  if (!volcadoCompleto) {
+    console.error('celdas-python.json no trae la planilla de referencia. '
+      + 'Regenerarlo: python3 dump-celdas.py');
+    return 1;
+  }
+  const completa = volcadoCompleto.grillas;
+  const enBlanco = sinRespuestas(completa);
 
   const revisiones = [];
   const revisar = (nombre, ok, detalle) => revisiones.push([nombre, ok, detalle]);
