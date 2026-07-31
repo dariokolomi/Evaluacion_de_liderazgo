@@ -21,3 +21,10 @@ __pycache__/
 
 # Documento personal, no pertenece al proyecto
 Resumen Clase 1*.docx
+
+# Perfiles de puesto reales: vienen en la plantilla corporativa del cliente, con
+# su marca y su línea de reporte, y este repositorio es público. El ejemplo que
+# sí se versiona es compartido/modelos/PERFIL DE PUESTO - ejemplo.pdf, que lo
+# reconstruye sin nada de eso (02-appsscript/herramientas/generar-perfil-ejemplo.py).
+Perfil de Puesto*.pdf
+!compartido/modelos/PERFIL DE PUESTO - ejemplo.pdf
