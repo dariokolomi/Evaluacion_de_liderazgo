@@ -81,6 +81,16 @@ function main() {
     /puestoElegido = null;[\s\S]{0,80}mostrarPuestoElegido\(\);[\s\S]{0,60}cargarHistorial\(\)/.test(js));
   revisar('el historial muestra el código de cada evaluación',
     /<th>Código<\/th>/.test(marcado) && /corrida\.codigo/.test(js));
+  // El dato viajaba hasta el Sheet y se perdía en el borde del servidor: una
+  // corrida contra un perfil de puesto y una sin perfil se veían iguales.
+  revisar('y con qué perfil de puesto se contrastó, si hubo alguno',
+    /<th>Perfil de puesto<\/th>/.test(marcado) && /corrida\.perfilPuesto/.test(js));
+  revisar('el nombre completo del perfil queda en el title, que es lo que se recorta',
+    /tdPerfil\.title = corrida\.perfilPuesto/.test(js));
+  // Un colspan corto deja la fila de "no hay nada" sin cubrir la última columna.
+  revisar('las filas de aviso del historial cubren las siete columnas',
+    (marcado.split('<tbody id="historial"')[0].split('<table>').pop().match(/<th>/g) || []).length === 7
+    && !/\$\('historial'\)\.replaceChildren\(fila\(\[e\.message\], 'vacio', 6\)\)/.test(js));
   // La subida es la única fuente de planilla: no hay desplegable ni se le pide
   // al servidor la lista de la carpeta.
   revisar('no hay un desplegable para elegir entre las planillas de la carpeta',

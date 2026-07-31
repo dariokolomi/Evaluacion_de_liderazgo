@@ -131,6 +131,16 @@
     td { padding: .5rem .6rem; border-bottom: 1px solid var(--borde); vertical-align: middle; }
     tr:hover td { background: #fafbfe; }
     .estrellas { color: var(--acento); letter-spacing: .1em; white-space: nowrap; }
+    /* Los nombres de los perfiles de puesto son largos —"Scrum Master Tecnología
+       Desarrollo Líder de Gestión de Desarrollo"— y sin tope se comen el ancho de
+       las otras seis columnas. El nombre entero queda en el title de la celda. */
+    .perfil {
+      max-width: 12rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sin-perfil { color: #7b8794; }
     .vacio { color: #7b8794; font-style: italic; }
     .cargando { display: flex; align-items: center; gap: .6rem; }
     /* Línea de proceso: los puntos son las etapas reales de la generación, no un
@@ -311,11 +321,11 @@
         <thead>
           <tr>
             <th>Código</th><th>Fecha</th><th>Evaluado</th><th>Informe</th>
-            <th>Generado por</th><th>Calificación</th>
+            <th>Perfil de puesto</th><th>Generado por</th><th>Calificación</th>
           </tr>
         </thead>
         <tbody id="historial">
-          <tr><td colspan="6" class="vacio">Cargando…</td></tr>
+          <tr><td colspan="7" class="vacio">Cargando…</td></tr>
         </tbody>
       </table>
     </section>
@@ -585,13 +595,13 @@
         .withSuccessHandler((corridas) => {
           const cuerpo = $('historial');
           if (!corridas.length) {
-            cuerpo.replaceChildren(fila(['Todavía no se generó ningún informe'], 'vacio', 6));
+            cuerpo.replaceChildren(fila(['Todavía no se generó ningún informe'], 'vacio', 7));
             return;
           }
           cuerpo.replaceChildren(...corridas.map(filaDeCorrida));
         })
         .withFailureHandler((e) => {
-          $('historial').replaceChildren(fila([e.message], 'vacio', 6));
+          $('historial').replaceChildren(fila([e.message], 'vacio', 7));
         })
         .listarHistorial(25);
     }
@@ -604,6 +614,20 @@
       if (colspan) td.colSpan = colspan;
       tr.appendChild(td);
       return tr;
+    }
+
+    /**
+     * El nombre del perfil de puesto, sin lo que ya dice el resto de la fila.
+     *
+     * En el historial se guarda el nombre del archivo tal como quedó en Drive
+     * —"A12-PERFIL Scrum Master Tecnología….pdf"—. El código ya está en la primera
+     * columna y la extensión no aporta nada, así que los dos se sacan: lo que
+     * queda es el puesto, que es el dato por el que se mira esta columna.
+     */
+    function nombreDePerfil(archivo) {
+      return String(archivo)
+        .replace(/^[A-Z]+\d+-PERFIL /, '')
+        .replace(/\.(pdf|docx|doc)$/i, '');
     }
 
     function filaDeCorrida(corrida) {
@@ -626,6 +650,20 @@
         tdLink.appendChild(a);
       }
       tr.appendChild(tdLink);
+
+      // Con qué perfil de puesto se contrastó, o un guión si no se subió ninguno.
+      // El punto 6 es opcional, así que la mayoría de las filas viejas no tienen
+      // nada acá: el guión las distingue de una celda vacía por error.
+      const tdPerfil = document.createElement('td');
+      if (corrida.perfilPuesto) {
+        tdPerfil.className = 'perfil';
+        tdPerfil.textContent = nombreDePerfil(corrida.perfilPuesto);
+        tdPerfil.title = corrida.perfilPuesto;
+      } else {
+        tdPerfil.className = 'sin-perfil';
+        tdPerfil.textContent = '—';
+      }
+      tr.appendChild(tdPerfil);
 
       const tdUsuario = document.createElement('td');
       tdUsuario.textContent = corrida.usuario;

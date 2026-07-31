@@ -31,7 +31,7 @@ var TITULO = 'Informes de Liderazgo — CCHH';
  * mismo que un despliegue, y un número que se mueve sin que nadie lo decida no
  * sirve para hablar de "la 2.4".
  */
-var VERSION_APP = 'v2.18';
+var VERSION_APP = 'v2.19';
 
 var LIMITE_HISTORIAL_COMPLETO = 5000;
 
@@ -236,7 +236,12 @@ function listarHistorial(limite) {
       usuario: corrida.usuario,
       segundos: corrida.segundos,
       calificacion: corrida.calificacion,
-      comentario: corrida.comentario
+      comentario: corrida.comentario,
+      // El historial lo guarda desde que existe el punto 6, pero hasta ahora se
+      // quedaba en el Sheet: una corrida contra un perfil de puesto y una sin
+      // perfil se veían idénticas en la lista, y la única forma de saber cuál
+      // era cuál era abrir el informe o mirar la carpeta.
+      perfilPuesto: corrida.perfilPuesto
     };
   });
 }

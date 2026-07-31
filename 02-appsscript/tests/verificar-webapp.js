@@ -308,7 +308,8 @@ function main() {
     filas: [
       ENCABEZADO,
       [new Date(2026, 6, 20), 'Primero', 'p1.xlsx', 'https://drive/1', USUARIO, 4.1, '', ''],
-      [new Date(2026, 6, 22), 'Segundo', 'p2.xlsx', 'https://drive/2', USUARIO, 3.9, 5, 'muy bueno'],
+      [new Date(2026, 6, 22), 'Segundo', 'p2.xlsx', 'https://drive/2', USUARIO, 3.9, 5, 'muy bueno',
+        'A02', 'A02-PERFIL Scrum Master.pdf'],
     ],
   });
   const gsCorridas = cargarGs(conCorridas.globales);
@@ -318,6 +319,13 @@ function main() {
     historial.valor && historial.valor.map((c) => c.evaluado).join(', '));
   revisar('y devuelve el número de fila para poder calificar',
     !historial.error && historial.valor[0].fila === 3 && historial.valor[1].fila === 2);
+  // Sin esto el dato muere en el borde del servidor: el Sheet lo guarda desde que
+  // existe el punto 6, pero la interfaz no puede distinguir una corrida contra un
+  // perfil de puesto de una sin perfil.
+  revisar('y con qué perfil de puesto se contrastó cada corrida',
+    !historial.error && historial.valor[0].perfilPuesto === 'A02-PERFIL Scrum Master.pdf'
+    && !historial.valor[1].perfilPuesto,
+    historial.valor && JSON.stringify(historial.valor.map((c) => c.perfilPuesto)));
   revisar('listarHistorial exige acceso por su cuenta',
     !!intentar(() => gsSinAcceso.listarHistorial()).error);
 
