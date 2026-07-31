@@ -323,7 +323,7 @@ titulo("Dar de alta a una persona", 12)
 parrafo(
     "Agregarla al Grupo de Google y nada más: no necesita permisos propios sobre Drive. Tener en "
     "cuenta que dentro del grupo todos ven todo, así que el alta da acceso a los informes de todas "
-    "las personas evaluadas. El detalle está en RESUMEN-Y-ACCESOS.md."
+    "las personas evaluadas. El detalle está en ACCESOS.md."
 )
 
 titulo("Si algo falla", 12)
