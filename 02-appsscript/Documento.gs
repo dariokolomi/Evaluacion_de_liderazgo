@@ -807,22 +807,33 @@ function planDeDesarrollo(body, adecuacion, resultados) {
 /**
  * Quién escribió la prosa del punto 6.
  *
- * Misma razón que `notaDeAutoria` en el punto 5: el informe se archiva y quien lo
- * lee después tiene que poder saber qué parte la redactó un modelo. Acá se agrega
- * algo más —que los números son del sistema— porque es justamente lo que
- * distingue a esta sección: la prosa puede ser asistida, la cuenta nunca lo es.
+ * Misma forma que `notaDeAutoria` en el punto 5, a propósito: son dos pies de la
+ * misma clase al final de dos secciones del mismo informe, y cuando una tenía una
+ * línea y la otra cuatro, la larga se leía como si algo hubiera salido mal.
+ *
+ * EL PUNTO 6 USA EL MODELO DOS VECES: una para interpretar el documento del puesto
+ * —que corre al SUBIR el archivo, no acá— y otra para redactar la prosa. Cada una
+ * recorre la lista de modelos por su cuenta (Puesto.gs), así que pueden terminar en
+ * modelos distintos si el principal falla en un momento y responde en el otro. Se
+ * nombran los dos SÓLO en ese caso: repetir el mismo nombre dos veces en el caso
+ * normal se lee como un error, y era lo que pasaba antes.
  */
 function notaDeAutoriaDelPuesto(body, adecuacion) {
   body.appendParagraph('');
-  var quien = adecuacion.narrativa && adecuacion.narrativa.modelo
-    ? 'Prosa asistida por IA ' + nombreDeModelo(adecuacion.narrativa.modelo)
-    : 'Prosa generada con el texto determinista del sistema, sin asistencia de IA';
-  var comoSeLeyo = adecuacion.modelo
-    ? ' El perfil de puesto lo interpretó ' + nombreDeModelo(adecuacion.modelo)
-      + ', y cada exigencia se verificó contra una cita literal del documento.'
+  var deLaProsa = adecuacion.narrativa && adecuacion.narrativa.modelo
+    ? nombreDeModelo(adecuacion.narrativa.modelo)
     : '';
-  parrafo(body, quien + '. El índice de adecuación, la cobertura, el nivel de riesgo '
-    + 'y las alertas los calcula el sistema con los mismos cortes que el resto del '
-    + 'informe.' + comoSeLeyo + ' Requiere revisión profesional antes de la devolución.',
+  var delPuesto = adecuacion.modelo ? nombreDeModelo(adecuacion.modelo) : '';
+
+  var quien;
+  if (!deLaProsa) {
+    quien = 'Prosa generada con el texto determinista del sistema, sin asistencia de IA';
+  } else if (delPuesto && delPuesto !== deLaProsa) {
+    quien = 'Prosa asistida por IA ' + deLaProsa + ', perfil de puesto interpretado por '
+      + delPuesto;
+  } else {
+    quien = 'Prosa asistida por IA ' + deLaProsa;
+  }
+  parrafo(body, quien + ' - Requiere revisión profesional antes de la devolución.',
     { cursiva: true, tamano: 8 });
 }

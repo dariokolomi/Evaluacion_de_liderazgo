@@ -318,8 +318,16 @@ function main() {
     textoDelInforme.indexOf('Índice de adecuación: ') >= 0
     && textoDelInforme.indexOf('6.2 Alertas sobre el índice') >= 0
     && textoDelInforme.indexOf('6.5 Plan Personalizado de Desarrollo') >= 0);
-  revisar('y la nota que aclara que los números los calcula el sistema',
-    /los calcula el sistema/.test(textoDelInforme));
+  // Los dos pies de autoría —punto 5 y punto 6— tienen que leerse como la misma
+  // clase de nota. Cuando el del punto 6 tenía cuatro oraciones y el del 5 una, la
+  // diferencia de largo se leía como si algo hubiera salido mal en el punto 6.
+  const pies = textoDelInforme.split('\n')
+    .filter((l) => / - Requiere revisión profesional antes de la devolución\.$/.test(l));
+  revisar('los dos pies de autoría tienen la misma forma', pies.length === 2,
+    pies.join(' || '));
+  revisar('el del punto 6 habla de la prosa y el del punto 5 de la síntesis',
+    pies.length === 2 && /^Síntesis /.test(pies[0]) && /^Prosa /.test(pies[1]),
+    pies.join(' || '));
   revisar('los tres archivos de la evaluación quedan con el mismo código',
     conPuesto.registro.renombrados.length === 2
     && conPuesto.registro.renombrados.some((r) => r.nombre === 'A01-PLANILLA Ana Pérez.xlsx')
