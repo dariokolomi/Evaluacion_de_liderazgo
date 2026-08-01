@@ -325,6 +325,11 @@ function main() {
     .filter((l) => / - Requiere revisión profesional antes de la devolución\.$/.test(l));
   revisar('los dos pies de autoría tienen la misma forma', pies.length === 2,
     pies.join(' || '));
+  // El porcentaje es lo que más se lee del punto 6. Que la aclaración esté en la
+  // MISMA línea es el punto: en el pie de la sección llegaba tarde.
+  revisar('la aclaración de quién calcula el índice va pegada al porcentaje',
+    /Índice de adecuación: \d+ %\s+lo calcula el sistema, no la IA/.test(textoDelInforme),
+    (textoDelInforme.split('\n').find((l) => l.indexOf('Índice de adecuación') >= 0) || ''));
   revisar('el del punto 6 habla de la prosa y el del punto 5 de la síntesis',
     pies.length === 2 && /^Síntesis /.test(pies[0]) && /^Prosa /.test(pies[1]),
     pies.join(' || '));

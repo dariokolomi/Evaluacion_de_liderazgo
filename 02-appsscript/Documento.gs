@@ -661,6 +661,11 @@ function matrizDeCoincidencia(body, nombre, adecuacion, cam) {
   var p = body.appendParagraph('');
   textoNegrita(p, 'Índice de adecuación: ', { tamano: 12 });
   textoNegrita(p, adecuacion.porcentaje + ' %', { tamano: 12, color: AZUL_INSTITUCIONAL });
+  // Al lado del número y no en el pie de la sección: el porcentaje es lo que más
+  // se lee del punto 6, y quien lo lee tiene que saber ahí mismo que no lo escribió
+  // el modelo. Antes esto vivía en la nota de autoría del final, donde llegaba
+  // tarde y, al acortar esa nota, se perdió del informe entero.
+  textoNormal(p, '   lo calcula el sistema, no la IA', { cursiva: true, tamano: 9 });
 
   parrafo(body, 'Calculado sobre ' + adecuacion.cobertura.medidos + ' de los '
     + adecuacion.cobertura.total + ' requisitos que declara el perfil de puesto: los '
