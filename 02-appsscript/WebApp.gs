@@ -31,7 +31,7 @@ var TITULO = 'Informes de Liderazgo — CCHH';
  * mismo que un despliegue, y un número que se mueve sin que nadie lo decida no
  * sirve para hablar de "la 2.4".
  */
-var VERSION_APP = 'v2.20';
+var VERSION_APP = 'v2.21';
 
 var LIMITE_HISTORIAL_COMPLETO = 5000;
 
@@ -54,8 +54,10 @@ function doGet() {
   plantilla.version = VERSION_APP;
   // Los nombres de las etapas viajan desde el servidor para no tener la lista
   // escrita dos veces: si se agrega una etapa en Progreso.gs, la interfaz la
-  // dibuja sola.
+  // dibuja sola. Van las dos listas, una por modelo de informe: los flujos son
+  // distintos y las líneas de progreso también.
   plantilla.etapasJson = JSON.stringify(ETAPAS_INFORME);
+  plantilla.etapas2Json = JSON.stringify(ETAPAS_INFORME_2);
   return plantilla.evaluate()
     .setTitle(TITULO + ' ' + VERSION_APP)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -221,6 +223,17 @@ function generarDesdeInterfaz(pedido) {
   return generarInforme(pedido); // ya verifica configuración y acceso
 }
 
+/**
+ * Genera el Informe 2, el otro modelo. Devuelve lo mismo que generarInforme2().
+ *
+ * Es una función aparte y no un parámetro de la anterior porque los dos flujos
+ * son dos: distinto armado, distinta redacción, distintas etapas y dos campos
+ * más en el pedido. La interfaz elige a cuál de las dos llamar según la solapa.
+ */
+function generarInforme2DesdeInterfaz(pedido) {
+  return generarInforme2(pedido); // ya verifica configuración y acceso
+}
+
 function listarHistorial(limite) {
   var config = configuracion();
   exigirAcceso(config.grupoAutorizado);
@@ -241,7 +254,13 @@ function listarHistorial(limite) {
       // quedaba en el Sheet: una corrida contra un perfil de puesto y una sin
       // perfil se veían idénticas en la lista, y la única forma de saber cuál
       // era cuál era abrir el informe o mirar la carpeta.
-      perfilPuesto: corrida.perfilPuesto
+      perfilPuesto: corrida.perfilPuesto,
+      // Con dos modelos de informe conviviendo, esto es lo único que dice cuál
+      // se generó en cada corrida. Las corridas viejas no lo tienen y
+      // `modeloDeCorrida` las resuelve como Informe 1, que es lo que eran.
+      modelo: corrida.modelo,
+      gerencia: corrida.gerencia,
+      sector: corrida.sector
     };
   });
 }

@@ -30,15 +30,47 @@ function main() {
 
   // ── Cada $('id') tiene su id en el marcado ──
   const ids = new Set([...marcado.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
-  const usados = [...new Set([...js.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]))];
+  // El panel de generación busca sus elementos con $$('base'), que resuelve a
+  // 'base' + el sufijo del panel. Los dos usos se separan acá: un $ se resuelve
+  // tal cual, un $$ hay que resolverlo con cada sufijo.
+  const usados = [...new Set([...js.matchAll(/(?<!\$)\$\('([^']+)'\)/g)].map((m) => m[1]))];
   const huerfanos = usados.filter((u) => !ids.has(u));
   revisar('todos los elementos que busca el script existen en el marcado',
     huerfanos.length === 0, huerfanos.join(', '));
 
-  // Los que se arman concatenando —$('periodo-' + g)— no los ve la búsqueda de
-  // arriba, así que van escritos acá uno por uno.
+  // El cuerpo de crearPanel corre para los dos paneles, así que cada elemento
+  // que busca tiene que existir en los dos. Es lo que se rompe al agregarle un
+  // campo a uno solo: el panel al que le falta devuelve null y nadie se entera
+  // hasta que alguien lo toca.
+  const cuerpoDelPanel = js.slice(js.indexOf('function crearPanel(config)'),
+    js.indexOf('/** 72.4 →'));
+  const enElCuerpo = [...new Set([...cuerpoDelPanel.matchAll(/\$\$\('([^']+)'\)/g)]
+    .map((m) => m[1]))];
+  const sinPareja = enElCuerpo.filter((u) => !ids.has(u) || !ids.has(u + '2'));
+  revisar('cada elemento que busca crearPanel existe en los dos paneles',
+    sinPareja.length === 0, sinPareja.join(', '));
+
+  // Y lo que cada panel busca en SU configuración —los campos propios de ese
+  // modelo, como la gerencia y el sector del Informe 2— existe con su sufijo.
+  const configuraciones = js.split('crearPanel({').slice(1);
+  const propiosHuerfanos = [];
+  configuraciones.forEach((bloque) => {
+    const sufijo = (bloque.match(/sufijo: '([^']*)'/) || [null, ''])[1];
+    [...bloque.matchAll(/\$\$\('([^']+)'\)/g)].forEach((m) => {
+      if (!ids.has(m[1] + sufijo)) propiosHuerfanos.push(m[1] + sufijo);
+    });
+  });
+  revisar('y los campos propios de cada modelo existen en su panel',
+    propiosHuerfanos.length === 0, propiosHuerfanos.join(', '));
+
+  // Los que se arman concatenando —$('periodo-' + g), $('vista-' + v)— no los ve
+  // la búsqueda de arriba, así que van escritos acá uno por uno.
   ['periodo-dia', 'periodo-semana', 'periodo-mes'].forEach((id) => {
     revisar(`el botón ${id} existe`, ids.has(id));
+  });
+  ['informes', 'informes2', 'metricas'].forEach((vista) => {
+    revisar(`la solapa ${vista} tiene su botón y su panel`,
+      ids.has('tab-' + vista) && ids.has('vista-' + vista));
   });
 
   // ── Subida de planillas ──
@@ -76,7 +108,7 @@ function main() {
   revisar('y también lo que descartó, que es lo que después sale como alerta',
     /Sin usar, porque el documento no las sostiene/.test(js));
   revisar('la lectura del puesto viaja en el pedido de generación',
-    /generarDesdeInterfaz\(\{[\s\S]{0,400}puesto: puestoElegido/.test(js));
+    /const pedido = Object\.assign\(\{[\s\S]{0,500}puesto: puestoElegido/.test(js));
   revisar('y se limpia al terminar: es de esta evaluación, no de la próxima',
     /puestoElegido = null;[\s\S]{0,80}mostrarPuestoElegido\(\);[\s\S]{0,60}cargarHistorial\(\)/.test(js));
   revisar('el historial muestra el código de cada evaluación',
@@ -88,9 +120,42 @@ function main() {
   revisar('el nombre completo del perfil queda en el title, que es lo que se recorta',
     /tdPerfil\.title = corrida\.perfilPuesto/.test(js));
   // Un colspan corto deja la fila de "no hay nada" sin cubrir la última columna.
-  revisar('las filas de aviso del historial cubren las siete columnas',
-    (marcado.split('<tbody id="historial"')[0].split('<table>').pop().match(/<th>/g) || []).length === 7
-    && !/\$\('historial'\)\.replaceChildren\(fila\(\[e\.message\], 'vacio', 6\)\)/.test(js));
+  const columnasHistorial = (marcado.split('<tbody id="historial"')[0]
+    .split('<table>').pop().match(/<th>/g) || []).length;
+  revisar('las filas de aviso del historial cubren las ocho columnas',
+    columnasHistorial === 8
+    && (js.match(/fila\(\[[^\]]*\], 'vacio', 8\)/g) || []).length === 2
+    && !/'vacio', 7\)/.test(js));
+
+  // ── Las dos solapas de generación ──
+  revisar('la solapa del Informe 2 se llama por su modelo, no "informes"',
+    /id="tab-informes2"[^>]*>Informe 2</.test(marcado)
+    && /id="tab-informes"[^>]*>Informe 1</.test(marcado));
+  revisar('cada solapa dice qué informe genera antes de que haya que elegir',
+    (marcado.match(/class="ayuda descripcion-modelo"/g) || []).length === 2);
+  revisar('el Informe 2 pide la gerencia y el sector',
+    ids.has('gerencia2') && ids.has('sector2'));
+  revisar('y no deja generar sin ellos: se avisa antes de arrancar la corrida',
+    /if \(!gerencia\) return \{ error: /.test(js) && /if \(!sector\) return \{ error: /.test(js));
+  revisar('los dos campos viajan en el pedido',
+    /valores: \{ gerencia: gerencia, sector: sector \}/.test(js));
+  revisar('y se limpian al terminar, como el nombre',
+    /limpiarExtra: \(\$\$\) => \{[\s\S]{0,120}\$\$\('gerencia'\)\.value = ''/.test(js));
+  revisar('cada panel le habla a su propia función del servidor',
+    /metodo: 'generarDesdeInterfaz'/.test(js)
+    && /metodo: 'generarInforme2DesdeInterfaz'/.test(js));
+  revisar('y usa su propia lista de etapas, que viene del servidor',
+    /etapas: <\?!= etapasJson \?>/.test(js) && /etapas: <\?!= etapas2Json \?>/.test(js));
+  revisar('el panel de generación está escrito una sola vez y se instancia dos',
+    (js.match(/crearPanel\(\{/g) || []).length === 2
+    && (js.match(/function crearPanel\(config\)/g) || []).length === 1);
+  revisar('el historial se ve desde las dos solapas de generación',
+    ids.has('vista-historial')
+    && /\$\('vista-historial'\)\.classList\.toggle\('oculto', cual === 'metricas'\)/.test(js));
+  revisar('el historial dice con qué modelo se generó cada informe',
+    /<th>Modelo<\/th>/.test(marcado) && /corrida\.modelo/.test(js));
+  revisar('generar sigue siendo el único botón principal del panel del Informe 2',
+    (marcado.match(/<button id="generar2"(?![^>]*class=)/) || []).length === 1);
   // La subida es la única fuente de planilla: no hay desplegable ni se le pide
   // al servidor la lista de la carpeta.
   revisar('no hay un desplegable para elegir entre las planillas de la carpeta',

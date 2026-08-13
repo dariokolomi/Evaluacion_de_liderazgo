@@ -44,6 +44,26 @@ var ETAPAS_INFORME = [
   'Guardando en Drive'
 ];
 
+/**
+ * Las etapas del Informe 2, que son otras.
+ *
+ * No es la misma lista con un nombre cambiado: el flujo es distinto. No hay
+ * gráfico —el modelo 2 no lo lleva— y el contraste con el puesto pasa a estar
+ * ANTES de la redacción, porque el índice y el riesgo son parte de lo que se le
+ * pasa al modelo para escribir el diagnóstico.
+ *
+ * Son seis contra las siete del otro. La lista viaja a la interfaz, así que la
+ * línea de progreso se dibuja sola con la cantidad que corresponda.
+ */
+var ETAPAS_INFORME_2 = [
+  'Abriendo planilla',
+  'Corrigiendo respuestas',
+  'Contrastando con el puesto',
+  'Redactando el informe',
+  'Componiendo el documento',
+  'Guardando en Drive'
+];
+
 // Alcanza para la corrida más lenta que se midió, sin dejar basura en el Cache.
 var PROGRESO_SEGUNDOS_VIDA = 900;
 
@@ -58,19 +78,30 @@ function claveDeProgreso(token) {
  * es una molestia; perder el informe, no.
  *
  * @param {string} token identificador de la corrida, o vacío para no registrar
- * @param {number} indice posición en ETAPAS_INFORME
+ * @param {number} indice posición en `etapas`
+ * @param {Array<string>} etapas la lista del informe que se está generando
  */
-function marcarEtapa(token, indice) {
+function marcarEtapaDe(token, indice, etapas) {
   if (!token) return;
   try {
     CacheService.getScriptCache().put(
       claveDeProgreso(token),
-      JSON.stringify({ etapa: indice, total: ETAPAS_INFORME.length, nombre: ETAPAS_INFORME[indice] }),
+      JSON.stringify({ etapa: indice, total: etapas.length, nombre: etapas[indice] }),
       PROGRESO_SEGUNDOS_VIDA
     );
   } catch (e) {
     console.warn('No se pudo registrar la etapa ' + indice + ': ' + e.message);
   }
+}
+
+/** La etapa en curso del Informe 1. */
+function marcarEtapa(token, indice) {
+  marcarEtapaDe(token, indice, ETAPAS_INFORME);
+}
+
+/** La etapa en curso del Informe 2. */
+function marcarEtapa2(token, indice) {
+  marcarEtapaDe(token, indice, ETAPAS_INFORME_2);
 }
 
 /** Borra el progreso al terminar, salga bien o mal. */

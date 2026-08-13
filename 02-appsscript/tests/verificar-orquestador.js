@@ -19,8 +19,9 @@ const CELDAS = path.join(__dirname, 'celdas-python.json');
 
 const ARCHIVOS_GS = [
   'Correccion.gs', 'Lectura.gs', 'Textos.gs', 'Perfil.gs', 'Documento.gs',
-  'Radar.gs', 'Configuracion.gs', 'Acceso.gs', 'Historial.gs', 'Sintesis.gs',
-  'Puesto.gs', 'Progreso.gs', 'Informe.gs',
+  'Documento2.gs', 'Radar.gs', 'Configuracion.gs', 'Acceso.gs', 'Historial.gs',
+  'Sintesis.gs', 'Sintesis2.gs', 'Puesto.gs', 'Progreso.gs', 'Informe.gs',
+  'Informe2.gs',
 ];
 
 const CARPETA_INFORMES = 'carpeta-informes-id';
@@ -188,7 +189,7 @@ function crearEntorno(grillas, escenario) {
 function cargarGs(globales) {
   const fuente = ARCHIVOS_GS.map((a) => fs.readFileSync(path.join(RAIZ, a), 'utf8')).join('\n');
   const nombres = Object.keys(globales);
-  return new Function(...nombres, `${fuente}\nreturn { generarInforme };`)(...nombres.map((n) => globales[n]));
+  return new Function(...nombres, `${fuente}\nreturn { generarInforme, generarInforme2 };`)(...nombres.map((n) => globales[n]));
 }
 
 /**
@@ -225,6 +226,35 @@ function correr(grillas, escenario) {
   try {
     resultado = generarInforme(Object.assign(
       { planillaId: 'planilla-id', nombreEvaluado: 'Ana Pérez' }, e.pedido || {}
+    ));
+  } catch (ex) {
+    error = ex;
+  }
+  return { ...entorno, resultado, error };
+}
+
+/**
+ * Lo mismo para el otro modelo de informe.
+ *
+ * Corre contra el MISMO Drive simulado: los dos flujos crean, exportan,
+ * renombran y registran igual, y lo que este verificador mira es justamente eso.
+ * La gerencia y el sector van en el pedido por defecto porque el Informe 2 los
+ * exige; los escenarios que prueban que falten los pisan con vacío.
+ */
+function correr2(grillas, escenario) {
+  const e = escenario || {};
+  const entorno = crearEntorno(grillas, escenario);
+  const { generarInforme2 } = cargarGs(entorno.globales);
+  let resultado = null;
+  let error = null;
+  try {
+    resultado = generarInforme2(Object.assign(
+      {
+        planillaId: 'planilla-id',
+        nombreEvaluado: 'Ana Pérez',
+        gerencia: 'Tecnología',
+        sector: 'Infraestructura',
+      }, e.pedido || {}
     ));
   } catch (ex) {
     error = ex;
@@ -415,6 +445,88 @@ function main() {
   revisar('y descartando igual los temporales',
     exportRoto.registro.trashed.indexOf('doc-temporal') >= 0
     && exportRoto.registro.trashed.indexOf('copia-convertida') >= 0);
+
+  // ── El otro modelo de informe ──
+  // Comparte el Drive, el historial y el código de evaluación con el primero, y
+  // no comparte nada más: otro documento, otra redacción y dos campos más.
+  const dos = correr2(completa);
+  revisar('el Informe 2 se genera sin errores', !dos.error, dos.error && dos.error.message);
+  revisar('y su archivo se distingue del otro modelo por el nombre',
+    !!dos.resultado && dos.resultado.nombreArchivo === 'A01-INFORME2 Ana Pérez 20260723-1815.docx',
+    dos.resultado && dos.resultado.nombreArchivo);
+  const textoDos = dos.registro.cuerpo.bloques
+    .map((b) => (b.tipo === 'tabla'
+      ? b.filas.map((f) => f.map((c) => c.texto).join(' ')).join(' ')
+      : (b.tramos || []).map((t) => t.texto).join('')))
+    .join('\n');
+  revisar('el documento es el del modelo 2, no el del 1',
+    textoDos.indexOf('Informe de Perfil de Liderazgo e Integración Organizacional') >= 0
+    && textoDos.indexOf('1. DATOS CUANTITATIVOS.') === -1);
+  revisar('con la gerencia y el sector en el encabezado',
+    textoDos.indexOf('Gerencia: Tecnología') >= 0
+    && textoDos.indexOf('Sector: Infraestructura') >= 0);
+  // Sin clave del LLM configurada, la redacción sale por reglas. El informe se
+  // genera igual y lo declara: es la misma regla del punto 5 del otro modelo.
+  revisar('sin modelo disponible, el informe sale igual con el texto determinista',
+    dos.resultado.sintesisAsistida === false
+    && textoDos.indexOf('Informe generado con el texto determinista del sistema') >= 0);
+  revisar('el Informe 2 no arma el gráfico de radar: su modelo no lo lleva',
+    dos.registro.creados.every((c) => c.tipo !== 'planilla-radar'),
+    JSON.stringify(dos.registro.creados));
+  const filaDos = dos.registro.historial.filter((f) => f[0] !== 'Fecha')[0] || [];
+  revisar('el historial anota con qué modelo se generó, y la gerencia y el sector',
+    filaDos[10] === 'Informe 2' && filaDos[11] === 'Tecnología' && filaDos[12] === 'Infraestructura',
+    JSON.stringify(filaDos));
+  revisar('y sigue anotando el código, que es el mismo contador de los dos modelos',
+    filaDos[8] === 'A01');
+  revisar('los temporales se descartan igual que en el otro flujo',
+    dos.registro.trashed.indexOf('doc-temporal') >= 0
+    && dos.registro.trashed.indexOf('copia-convertida') >= 0,
+    dos.registro.trashed.join(', '));
+  revisar('y la planilla queda renombrada con el código de la evaluación',
+    dos.registro.renombrados.some((r) => r.nombre === 'A01-PLANILLA Ana Pérez.xlsx'),
+    JSON.stringify(dos.registro.renombrados));
+
+  // Los dos campos nuevos son obligatorios, y se rechazan ANTES de tocar Drive:
+  // una corrida que va a fallar no tiene por qué gastar un código ni dejar
+  // archivos dando vueltas.
+  [['gerencia', { gerencia: '' }], ['sector', { sector: '  ' }]].forEach(([campo, pedido]) => {
+    const falta = correr2(completa, { pedido: pedido });
+    revisar(`el Informe 2 no se genera sin ${campo}`,
+      !!falta.error && falta.error.message.toLowerCase().indexOf(campo) >= 0,
+      falta.error && falta.error.message);
+    revisar(`y al faltar ${campo} no toca Drive ni gasta un código`,
+      falta.registro.creados.length === 0
+      && Object.keys(falta.registro.propiedadesEscritas).length === 0);
+  });
+
+  const dosConPuesto = correr2(completa, { pedido: { puesto: {
+    id: 'perfil-id',
+    nombre: 'Perfil Scrum Master.pdf',
+    puesto: 'Scrum Master',
+    exigencias: [
+      { dimension: 'Liderazgo Participativo', nivelRequerido: 'Alto', critica: true, cita: 'facilita' },
+      { dimension: 'Conductas Orientadas a la Tarea', nivelRequerido: 'Alto', critica: true, cita: 'sigue' },
+    ],
+    descartadas: [],
+    noMedidos: [{ requisito: 'Título universitario', cita: 'Título universitario' }],
+  } } });
+  const textoDosConPuesto = dosConPuesto.registro.cuerpo.bloques
+    .map((b) => (b.tipo === 'tabla'
+      ? b.filas.map((f) => f.map((c) => c.texto).join(' ')).join(' ')
+      : (b.tramos || []).map((t) => t.texto).join('')))
+    .join('\n');
+  revisar('con perfil de puesto, el Informe 2 trae el índice de adecuación',
+    !dosConPuesto.error && dosConPuesto.resultado.conPuesto === true
+    && textoDosConPuesto.indexOf('Índice de Adecuación al Puesto: '
+      + dosConPuesto.resultado.adecuacion + ' %') >= 0,
+    dosConPuesto.error && dosConPuesto.error.message);
+  revisar('y los tres archivos de la evaluación quedan con el mismo código',
+    dosConPuesto.registro.renombrados.length === 2
+    && dosConPuesto.registro.renombrados.some((r) => r.nombre === 'A01-PERFIL Scrum Master.pdf'),
+    JSON.stringify(dosConPuesto.registro.renombrados));
+  revisar('sin perfil de puesto, el Informe 2 dice que no hay índice en vez de imprimir un cero',
+    textoDos.indexOf('Índice de Adecuación al Puesto: no calculado') >= 0);
 
   let fallados = 0;
   for (const [nombre, ok, detalle] of revisiones) {

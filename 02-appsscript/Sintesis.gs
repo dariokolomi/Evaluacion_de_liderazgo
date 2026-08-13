@@ -1069,17 +1069,22 @@ function jsonDeRespuesta(contenido) {
 /**
  * Una llamada al modelo, con el JSON ya extraído de la respuesta.
  *
- * Está separada de `pedirBloque` porque el punto 6 (Puesto.gs) le habla al mismo
- * endpoint de la misma forma y valida otra cosa. Lo único que comparten es CÓMO
- * se llama; escrito dos veces, el día que cambie un parámetro va a cambiar en un
- * solo lado y nadie se va a enterar hasta ver un informe raro.
+ * Está separada de `pedirBloque` porque el punto 6 (Puesto.gs) y el Informe 2
+ * (Sintesis2.gs) le hablan al mismo endpoint de la misma forma y validan otra
+ * cosa. Lo único que comparten es CÓMO se llama; escrito tres veces, el día que
+ * cambie un parámetro va a cambiar en un solo lado y nadie se va a enterar hasta
+ * ver un informe raro.
  *
  * No captura excepciones: el corte por tiempo de UrlFetchApp lo maneja quien
  * llama, que es el que sabe si conviene reintentar.
  *
+ * @param {number} [maxTokens] techo de la respuesta. Por defecto el del punto 5;
+ *   el Informe 2 pide bloques más largos y necesita el suyo. Es lo único que
+ *   cambia entre los tres llamadores, así que se pasa en vez de duplicar la
+ *   función.
  * @return {Object} {datos} o {motivo} — nunca las dos cosas
  */
-function respuestaDelModelo(mensajes, clave, modelo) {
+function respuestaDelModelo(mensajes, clave, modelo, maxTokens) {
   var respuesta = UrlFetchApp.fetch(LLM_URL, {
     method: 'post',
     contentType: 'application/json',
@@ -1089,7 +1094,7 @@ function respuestaDelModelo(mensajes, clave, modelo) {
       messages: mensajes,
       temperature: LLM_TEMPERATURA,
       top_p: LLM_TOP_P,
-      max_tokens: LLM_MAX_TOKENS,
+      max_tokens: maxTokens || LLM_MAX_TOKENS,
       stream: false
     }),
     muteHttpExceptions: true

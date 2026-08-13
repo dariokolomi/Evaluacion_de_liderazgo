@@ -24,8 +24,25 @@ var HISTORIAL_HOJA = 'Corridas';
  */
 var HISTORIAL_COLUMNAS = [
   'Fecha', 'Evaluado', 'Planilla', 'Informe', 'Generado por',
-  'Segundos', 'Calificación', 'Comentario', 'Código', 'Perfil de puesto'
+  'Segundos', 'Calificación', 'Comentario', 'Código', 'Perfil de puesto',
+  'Modelo', 'Gerencia', 'Sector'
 ];
+
+/**
+ * Con qué modelo de informe se generó una corrida.
+ *
+ * Las corridas anteriores a que existiera el Informe 2 tienen la celda vacía, y
+ * eso NO se rellena al vuelo: todas son del Informe 1, pero escribirlo ahora
+ * sería inventar un dato que en el momento nadie registró. `modeloDeCorrida`
+ * resuelve la celda vacía al leerla, que es donde el supuesto se puede declarar.
+ */
+var MODELO_INFORME_1 = 'Informe 1';
+var MODELO_INFORME_2 = 'Informe 2';
+
+/** La celda vacía de una corrida vieja es del único informe que existía. */
+function modeloDeCorrida(celda) {
+  return String(celda || '').trim() || MODELO_INFORME_1;
+}
 
 /** Devuelve la hoja de corridas, creándola con su encabezado si hace falta. */
 function hojaDeHistorial(historialId) {
@@ -72,7 +89,9 @@ var COL_COMENTARIO = 8;
 /**
  * Registra una corrida.
  * @param {Object} corrida {fecha, evaluado, planilla, informeUrl, usuario, segundos,
- *   codigo, perfilPuesto}
+ *   codigo, perfilPuesto, modelo, gerencia, sector}
+ *   `modelo` dice cuál de los dos informes se generó; `gerencia` y `sector` sólo
+ *   los trae el Informe 2, que es el único que los pide.
  */
 function registrarCorrida(historialId, corrida) {
   hojaDeHistorial(historialId).appendRow([
@@ -85,7 +104,10 @@ function registrarCorrida(historialId, corrida) {
     '', // la calificación la carga después quien revisa el informe
     '',
     corrida.codigo || '',
-    corrida.perfilPuesto || ''
+    corrida.perfilPuesto || '',
+    corrida.modelo || MODELO_INFORME_1,
+    corrida.gerencia || '',
+    corrida.sector || ''
   ]);
 }
 
@@ -115,7 +137,10 @@ function leerCorridas(historialId, limite) {
       calificacion: fila[6],
       comentario: fila[7],
       codigo: fila[8],
-      perfilPuesto: fila[9]
+      perfilPuesto: fila[9],
+      modelo: modeloDeCorrida(fila[10]),
+      gerencia: fila[11],
+      sector: fila[12]
     };
   }).reverse();
 }

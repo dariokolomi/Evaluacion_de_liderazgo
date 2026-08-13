@@ -18,11 +18,35 @@ node verificar-metricas.js      # Metricas.gs: los números del tablero
 node verificar-interfaz.js      # Interfaz.html: que el script y el marcado se correspondan
 node verificar-perfil.js        # Perfil.gs: las reglas de clasificación, escritas a mano
 node verificar-sintesis.js      # Sintesis.gs: el punto 5 y lo que se le manda al LLM
+node verificar-puesto.js        # Puesto.gs: el punto 6 y la lectura del perfil de puesto
+node verificar-informe2.js      # Sintesis2.gs y Documento2.gs: el otro modelo de informe
 ```
 
-Los siete verificadores de la app (`orquestador`, `webapp`, `metricas`, `radar`,
-`interfaz`, `perfil` y `puesto`) no necesitan volcados de Python: corren sin haber
-ejecutado nada antes.
+Los ocho verificadores de la app (`orquestador`, `webapp`, `metricas`, `radar`,
+`interfaz`, `perfil`, `puesto` e `informe2`) no necesitan volcados de Python:
+corren sin haber ejecutado nada antes.
+
+## Verificar el Informe 2
+
+`verificar-informe2.js` cubre el otro modelo de informe: los cuatro prompts, las
+validaciones, la síntesis determinista y el armado del documento.
+
+Lo que más importa que esté cubierto es **la verificación de las citas**. Los dos
+informes tratan a los números al revés y por eso tienen validaciones opuestas: el
+punto 5 del Informe 1 tiene prohibido escribir cualquier valor y alcanza con
+buscarlos, mientras que el Informe 2 se apoya en la triangulación explícita
+—"Amabilidad T=64 con Considerado P99"— y entonces hay que verificar uno por uno
+que existan en el perfil. Un percentil inventado y uno real se leen exactamente
+igual; el único que los distingue es `validarCitasPsicometricas`.
+
+Se verifica además que la síntesis determinista tenga **la misma forma** que la
+del modelo y que pase las mismas validaciones. Es lo que permite que
+`Documento2.gs` tenga un solo camino de armado: si las dos formas se separan, el
+informe pobre deja de imprimirse entero y nadie se entera hasta verlo.
+
+El flujo completo del Informe 2 contra Drive simulado —qué crea, qué renombra,
+qué registra y qué descarta— está en `verificar-orquestador.js`, junto al del
+Informe 1 y contra el mismo entorno.
 
 ## Verificar el punto 6
 
@@ -48,6 +72,13 @@ en el marcado, y las decisiones de la pantalla que sí se pueden leer del archiv
 que el botón de generar siga siendo la única acción principal, que el input de
 archivo esté escondido detrás de su botón y limitado a planillas, y que el
 tablero arranque en la semana.
+
+Con dos modelos de informe, el panel de generación está escrito una sola vez
+(`crearPanel`) y se instancia dos, con los ids de cada panel armados como el
+nombre base más el sufijo. Por eso el verificador separa los `$('id')` de los
+`$$('id')`: lo que busca el cuerpo de `crearPanel` tiene que existir en **los
+dos** paneles —es lo que se rompe al agregarle un campo a uno solo— y lo que
+busca la configuración de un panel, sólo en el suyo.
 
 Para una corrida más exigente: `python3 dump-referencia.py --fuzz 2000`.
 

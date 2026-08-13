@@ -15,8 +15,9 @@ const fs = require('fs');
 const path = require('path');
 
 const RAIZ = path.resolve(__dirname, '..');
-const ARCHIVOS_GS = ['Correccion.gs', 'Textos.gs', 'Perfil.gs', 'Sintesis.gs', 'Puesto.gs',
-  'Acceso.gs', 'Configuracion.gs', 'Historial.gs', 'Metricas.gs', 'Progreso.gs', 'Informe.gs', 'WebApp.gs'];
+const ARCHIVOS_GS = ['Correccion.gs', 'Textos.gs', 'Perfil.gs', 'Sintesis.gs', 'Sintesis2.gs',
+  'Puesto.gs', 'Acceso.gs', 'Configuracion.gs', 'Historial.gs', 'Metricas.gs', 'Progreso.gs',
+  'Documento.gs', 'Documento2.gs', 'Informe.gs', 'Informe2.gs', 'WebApp.gs'];
 
 const GRUPO = 'informes-rrhh@kolektor.com.ar';
 const USUARIO = 'ana.perez@kolektor.com.ar';
@@ -211,7 +212,8 @@ function cargarGs(globales) {
     `${fuente}\nreturn { doGet, listarHistorial, calificarInforme, obtenerMetricas, escaparHtml,
        progresoDeInforme, marcarEtapa, limpiarProgreso, ETAPAS_INFORME, VERSION_APP,
        compararHistorialConDrive, idDeUrlDeDrive, contarCorridas, vaciarCorridas,
-       HOJA_RESPALDO_PREFIJO, subirPlanilla, MAX_PLANILLA_BYTES };`
+       HOJA_RESPALDO_PREFIJO, subirPlanilla, MAX_PLANILLA_BYTES,
+       generarDesdeInterfaz, generarInforme2DesdeInterfaz, ETAPAS_INFORME_2 };`
   )(...nombres.map((n) => globales[n]));
 }
 
@@ -326,8 +328,41 @@ function main() {
     !historial.error && historial.valor[0].perfilPuesto === 'A02-PERFIL Scrum Master.pdf'
     && !historial.valor[1].perfilPuesto,
     historial.valor && JSON.stringify(historial.valor.map((c) => c.perfilPuesto)));
+  // Con dos modelos de informe conviviendo, esto es lo único que dice cuál se
+  // generó. Las dos filas de arriba son anteriores a que existiera la columna:
+  // se resuelven como Informe 1, que es lo que eran, y no se rellena el Sheet.
+  revisar('una corrida sin la columna del modelo se lee como Informe 1',
+    !historial.error && historial.valor.every((c) => c.modelo === 'Informe 1'),
+    historial.valor && historial.valor.map((c) => c.modelo).join(', '));
+
+  const conModelo2 = crearEntorno({
+    filas: [
+      ENCABEZADO,
+      [new Date(2026, 7, 12), 'Tercero', 'p3.xlsx', 'https://drive/3', USUARIO, 190.2, '', '',
+        'A03', 'A03-PERFIL Scrum Master.pdf', 'Informe 2', 'Tecnología', 'Infraestructura'],
+    ],
+  });
+  const historial2 = intentar(() => cargarGs(conModelo2.globales).listarHistorial(25));
+  revisar('y una del Informe 2 llega a la interfaz con su modelo, su gerencia y su sector',
+    !historial2.error && historial2.valor[0].modelo === 'Informe 2'
+    && historial2.valor[0].gerencia === 'Tecnología'
+    && historial2.valor[0].sector === 'Infraestructura',
+    historial2.valor && JSON.stringify(historial2.valor[0]));
+
   revisar('listarHistorial exige acceso por su cuenta',
     !!intentar(() => gsSinAcceso.listarHistorial()).error);
+
+  // Cada modelo de informe tiene su propia función invocable, y cada una vuelve a
+  // verificar el acceso: que doGet lo haya chequeado no protege a las demás.
+  revisar('el Informe 2 tiene su propia función invocable desde el navegador',
+    typeof gsCorridas.generarInforme2DesdeInterfaz === 'function'
+    && typeof gsCorridas.generarDesdeInterfaz === 'function');
+  revisar('y exige acceso por su cuenta, como todas',
+    !!intentar(() => gsSinAcceso.generarInforme2DesdeInterfaz({ planillaId: 'x' })).error);
+  revisar('las dos listas de etapas viajan a la interfaz, una por modelo',
+    Array.isArray(gsCorridas.ETAPAS_INFORME) && Array.isArray(gsCorridas.ETAPAS_INFORME_2)
+    && gsCorridas.ETAPAS_INFORME_2.indexOf('Armando el gráfico') === -1,
+    JSON.stringify(gsCorridas.ETAPAS_INFORME_2));
 
   // ── obtenerMetricas ──
   const metricas = intentar(() => gsCorridas.obtenerMetricas());
