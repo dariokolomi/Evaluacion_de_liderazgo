@@ -18,6 +18,11 @@ DESCRIPCION_PROPIEDADES[PROP_CARPETA_PLANILLAS] = 'ID de la carpeta donde se dej
 DESCRIPCION_PROPIEDADES[PROP_HISTORIAL] = 'ID del Google Sheet de historial y calificaciones';
 DESCRIPCION_PROPIEDADES[PROP_GRUPO_AUTORIZADO] = 'Dirección del Grupo de Google que puede usar la app (ej. informes-rrhh@kolektor.com.ar)';
 
+// NVIDIA_API_KEY y NVIDIA_MODELO (Sintesis.gs) NO se validan acá a propósito:
+// son opcionales. Sin la clave el informe se genera igual, con la síntesis
+// determinista del punto 5 en vez de la redactada por el LLM. Exigirlas dejaría
+// la app sin generar informes por una función que es un agregado, no la base.
+
 /**
  * @return {Object} {carpetaInformesId, historialId, grupoAutorizado}
  * @throws {Error} si falta alguna propiedad, diciendo cuál y para qué es.

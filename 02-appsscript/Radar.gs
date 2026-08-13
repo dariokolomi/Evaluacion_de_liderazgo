@@ -29,7 +29,11 @@ var RADAR_SERIE_IDEAL = 'Perfil ideal';
  */
 function datosParaRadar(resultados, nombreEvaluado) {
   var radar = resultados.radar;
-  var filas = [['Competencia', RADAR_SERIE_IDEAL, nombreEvaluado]];
+  // El encabezado de la columna de dominio va vacío a propósito: Sheets lo
+  // dibuja como un rótulo suelto arriba del radar (se veía un eje fantasma
+  // "Competencia"). Los nombres de serie —columnas 2 y 3— sí alimentan la
+  // leyenda, así que quedan.
+  var filas = [['', RADAR_SERIE_IDEAL, nombreEvaluado]];
   for (var i = 0; i < radar.etiquetas.length; i++) {
     filas.push([radar.etiquetas[i], radar.ideal[i], radar.evaluado[i]]);
   }
@@ -48,7 +52,11 @@ function opcionesDelRadar(nombreEvaluado) {
       0: { color: RADAR_COLOR_IDEAL },
       1: { color: RADAR_COLOR_EVALUADO }
     },
-    legend: { position: 'top' }
+    // Abajo, no arriba: al exportar el gráfico a PNG, la leyenda superior sale
+    // sin los textos de las series (solo los cuadraditos de color). Abajo se
+    // dibuja con "Perfil ideal" y el nombre del evaluado, como en la comparación
+    // aprobada (PLAN-APPSSCRIPT.md, sección 4).
+    legend: { position: 'bottom' }
   };
 }
 

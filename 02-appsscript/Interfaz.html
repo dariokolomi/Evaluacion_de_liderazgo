@@ -34,6 +34,16 @@
     }
     header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
     header .usuario { font-size: .85rem; opacity: .85; }
+    /* La versión se muestra para poder saber de un vistazo qué código está
+       sirviendo el navegador. Sin esto, un deployment viejo o una pestaña
+       cacheada se confunden con un error del código nuevo. */
+    header .version {
+      font-size: .78rem;
+      font-weight: 400;
+      opacity: .75;
+      margin-left: .35rem;
+      font-variant-numeric: tabular-nums;
+    }
     main { max-width: 60rem; margin: 0 auto; padding: 1.5rem; }
     section {
       background: #fff;
@@ -54,7 +64,37 @@
     }
     .campos { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     @media (max-width: 40rem) { .campos { grid-template-columns: 1fr; } }
-    .acciones { margin-top: 1.1rem; display: flex; align-items: center; gap: 1rem; }
+    /* Lo que cuelga de un campo: la acción que lo alimenta y su ayuda. Va pegado
+       al campo, no a la fila de acciones de abajo, porque no es una acción del
+       formulario sino de ese control. Así la fila de abajo conserva una sola
+       acción y no hay dudas de cuál es el botón que genera el informe. */
+    .bajo-campo {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-top: .45rem;
+      flex-wrap: wrap;
+    }
+    .ayuda { font-size: .78rem; color: #7b8794; }
+    /* Qué informe genera cada solapa. Con dos modelos conviviendo, el nombre de
+       la pestaña no alcanza para saber cuál elegir. */
+    .descripcion-modelo { margin: -.5rem 0 1.1rem; line-height: 1.5; max-width: 46rem; }
+    /* El nombre de la planilla cargada: mismo tamaño que la ayuda pero en el
+       color del texto, porque no es una indicación sino el dato con el que se va
+       a generar el informe. */
+    .elegida { margin-top: .4rem; color: var(--texto); }
+    .elegida:empty { display: none; }
+    /* Pie del formulario: una línea lo separa de los campos y la acción principal
+       queda alineada con el borde izquierdo, que es donde vuelve la vista después
+       de leer los campos de arriba. */
+    .acciones {
+      margin-top: 1.1rem;
+      padding-top: 1.1rem;
+      border-top: 1px solid var(--borde);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
     button {
       background: var(--cchh);
       color: #fff;
@@ -68,6 +108,8 @@
     button:hover:not(:disabled) { background: var(--cchh-claro); }
     button:disabled { opacity: .5; cursor: not-allowed; }
     button.secundario { background: transparent; color: var(--cchh); border: 1px solid var(--borde); }
+    button.secundario:hover:not(:disabled) { background: var(--cchh-fondo); }
+    button.chico { padding: .35rem .8rem; font-size: .82rem; font-weight: 600; }
     .spinner {
       width: 1.1rem; height: 1.1rem;
       border: 2px solid var(--borde);
@@ -92,8 +134,58 @@
     td { padding: .5rem .6rem; border-bottom: 1px solid var(--borde); vertical-align: middle; }
     tr:hover td { background: #fafbfe; }
     .estrellas { color: var(--acento); letter-spacing: .1em; white-space: nowrap; }
+    /* Los nombres de los perfiles de puesto son largos —"Scrum Master Tecnología
+       Desarrollo Líder de Gestión de Desarrollo"— y sin tope se comen el ancho de
+       las otras seis columnas. El nombre entero queda en el title de la celda. */
+    .perfil {
+      max-width: 12rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sin-perfil { color: #7b8794; }
     .vacio { color: #7b8794; font-style: italic; }
     .cargando { display: flex; align-items: center; gap: .6rem; }
+    /* Línea de proceso: los puntos son las etapas reales de la generación, no un
+       temporizador. La etapa en curso se marca en color y con su nombre al lado. */
+    .proceso { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+    /* Los puntos van unidos por un tramo para que se lea como línea de tiempo:
+       el tramo se pinta cuando la etapa que lo precede ya pasó. */
+    .etapas { display: flex; align-items: center; gap: 0; }
+    .etapa {
+      width: .5rem; height: .5rem;
+      border-radius: 50%;
+      background: var(--borde);
+      flex: none;
+      transition: background .3s, transform .3s;
+    }
+    .etapa.hecha { background: var(--cchh); }
+    .etapa.actual { background: var(--acento); transform: scale(1.6); }
+    /* La última etapa: informe terminado. */
+    .etapa.final { background: var(--cchh); transform: scale(1.6); box-shadow: 0 0 0 3px var(--cchh-fondo); }
+    .union {
+      width: .9rem; height: 2px;
+      background: var(--borde);
+      flex: none;
+      transition: background .3s;
+    }
+    .union.hecha { background: var(--cchh); }
+    .etapa-nombre {
+      font-size: .85rem;
+      color: var(--cchh);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .etapa-contador { font-size: .78rem; color: #7b8794; font-weight: 400; }
+    /* Tiempo total, al final de la línea y separado del resto. */
+    .etapa-tiempo {
+      margin-left: auto;
+      padding-left: .9rem;
+      font-size: .82rem;
+      color: #7b8794;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
     /* Utilitaria para esconder: con !important le gana a un display propio del
        elemento (si no, un `display` más específico lo deja siempre visible). */
     .oculto { display: none !important; }
@@ -112,6 +204,35 @@
     }
     nav.pestanias button[aria-selected="true"] { background: var(--cchh); color: #fff; border-color: var(--cchh); }
 
+    /* Selector de período. Un segmentado y no un <select>: son tres opciones que
+       conviene ver todas a la vez, y el cambio es instantáneo porque los tres
+       cortes ya vienen calculados del servidor. */
+    .segmentado { display: flex; gap: 0; }
+    .segmentado button {
+      background: #fff;
+      color: var(--cchh);
+      border: 1px solid var(--borde);
+      border-radius: 0;
+      padding: .35rem .9rem;
+      font-size: .82rem;
+    }
+    .segmentado button:first-child { border-radius: 6px 0 0 6px; }
+    .segmentado button:last-child { border-radius: 0 6px 6px 0; }
+    .segmentado button + button { border-left: 0; }
+    .segmentado button[aria-pressed="true"] { background: var(--cchh); color: #fff; border-color: var(--cchh); }
+    .titulo-con-accion {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .titulo-con-accion h2 { margin: 0; }
+    /* La variación contra el período anterior: el color dice el sentido, el signo
+       lo repite para no depender sólo del color. */
+    .variacion.sube { color: #2e7d32; }
+    .variacion.baja { color: #c62828; }
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
     @media (max-width: 46rem) { .kpis { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: var(--cchh-fondo); border-radius: 8px; padding: .9rem 1rem; }
@@ -131,50 +252,155 @@
 </head>
 <body>
   <header>
-    <h1>Informes de Liderazgo</h1>
+    <h1>Informes de Liderazgo <span class="version"><?= version ?></span></h1>
     <span class="usuario"><?= usuario ?></span>
   </header>
 
   <main>
     <nav class="pestanias" role="tablist">
-      <button id="tab-informes" role="tab" aria-selected="true">Informes</button>
+      <button id="tab-informes" role="tab" aria-selected="true">Informe 1</button>
+      <button id="tab-informes2" role="tab" aria-selected="false">Informe 2</button>
       <button id="tab-metricas" role="tab" aria-selected="false">Métricas</button>
     </nav>
 
     <div id="vista-informes">
     <section>
       <h2>Generar un informe</h2>
+      <p class="ayuda descripcion-modelo">Cinco secciones más el contraste con el
+        perfil de puesto. La síntesis final es la devolución que lee la persona
+        evaluada: habla de niveles y de conductas, sin puntajes.</p>
       <div class="campos">
         <div>
-          <label for="planilla">Planilla de respuestas</label>
-          <select id="planilla"><option value="">Cargando…</option></select>
+          <!-- La planilla se sube, no se elige de una lista. El desplegable
+               mostraba todas las planillas de la carpeta; ahora la única fuente es
+               el archivo que trae quien genera el informe, y el contenido de la
+               carpeta deja de estar a la vista en la pantalla. -->
+          <label for="subir">Planilla de respuestas</label>
+          <div class="bajo-campo">
+            <button type="button" id="subir" class="secundario chico">Subir planilla…</button>
+            <span class="ayuda">.xlsx o .xls, hasta 10 MB</span>
+          </div>
+          <!-- Sin desplegable no hay nada que muestre qué planilla quedó cargada,
+               así que el nombre se escribe acá y se queda a la vista. -->
+          <div id="planilla-elegida" class="ayuda elegida"></div>
+          <!-- El input de archivo va escondido y lo dispara el botón: así la
+               subida se ve como el resto de los botones en vez de como el control
+               nativo, que cada navegador dibuja distinto. El botón es un <button>
+               de verdad, así que sigue llegando por teclado. -->
+          <input type="file" id="archivo" class="oculto" accept=".xlsx,.xls">
         </div>
         <div>
           <label for="evaluado">Persona evaluada</label>
           <input type="text" id="evaluado" placeholder="Nombre y apellido" autocomplete="off">
         </div>
+        <div>
+          <!-- El perfil de puesto es OPCIONAL: con él, el informe suma el punto 6
+               —contraste contra lo que el puesto exige—; sin él, sale con las
+               cinco secciones de siempre. Se dice en la ayuda para que nadie
+               piense que falta completar algo. -->
+          <label for="subir-puesto">Perfil de puesto <span class="ayuda">(opcional)</span></label>
+          <div class="bajo-campo">
+            <button type="button" id="subir-puesto" class="secundario chico">Subir perfil de puesto…</button>
+            <span class="ayuda">.pdf, .docx o .doc — agrega el punto 6</span>
+          </div>
+          <div id="puesto-elegido" class="ayuda elegida"></div>
+          <input type="file" id="archivo-puesto" class="oculto" accept=".pdf,.docx,.doc">
+        </div>
       </div>
       <div class="acciones">
         <button id="generar" disabled>Generar informe</button>
         <div id="cargando" class="cargando oculto">
-          <div class="spinner"></div>
-          <span style="font-size:.9rem">Corrigiendo y armando el informe…</span>
+          <div id="spinner" class="spinner"></div>
+          <div class="proceso">
+            <div id="etapas" class="etapas"></div>
+            <span id="etapa-nombre" class="etapa-nombre">Empezando…</span>
+            <span id="etapa-contador" class="etapa-contador"></span>
+            <span id="etapa-tiempo" class="etapa-tiempo"></span>
+          </div>
         </div>
       </div>
       <div id="resultado"></div>
     </section>
+    </div>
 
+    <!-- El Informe 2: el otro modelo. Mismo formulario más la gerencia y el
+         sector, que van impresos en el encabezado del documento y que el
+         Informe 1 no pide. Los ids repiten los del panel de arriba con un "2"
+         atrás: el código de los dos paneles es el mismo y lo arma `crearPanel`. -->
+    <div id="vista-informes2" class="oculto">
+    <section>
+      <h2>Generar un Informe 2</h2>
+      <p class="ayuda descripcion-modelo">Informe técnico de integración psicométrica
+        para RRHH y la jefatura: diagnóstico global, matriz de coincidencia con el
+        puesto, inferencias trianguladas y plan de desarrollo con plazos e
+        indicadores. Cita los valores de cada prueba.</p>
+      <div class="campos">
+        <div>
+          <label for="subir2">Planilla de respuestas</label>
+          <div class="bajo-campo">
+            <button type="button" id="subir2" class="secundario chico">Subir planilla…</button>
+            <span class="ayuda">.xlsx o .xls, hasta 10 MB</span>
+          </div>
+          <div id="planilla-elegida2" class="ayuda elegida"></div>
+          <input type="file" id="archivo2" class="oculto" accept=".xlsx,.xls">
+        </div>
+        <div>
+          <label for="evaluado2">Persona evaluada</label>
+          <input type="text" id="evaluado2" placeholder="Nombre y apellido" autocomplete="off">
+        </div>
+        <div>
+          <label for="gerencia2">Gerencia</label>
+          <input type="text" id="gerencia2" placeholder="A qué gerencia pertenece el puesto" autocomplete="off">
+        </div>
+        <div>
+          <label for="sector2">Sector</label>
+          <input type="text" id="sector2" placeholder="A qué sector dentro de la gerencia" autocomplete="off">
+        </div>
+        <div>
+          <!-- Acá el perfil de puesto también es opcional, pero pesa más que en el
+               Informe 1: sin él no hay índice de adecuación ni matriz de ajuste, y
+               el informe sale con dos de sus tablas reemplazadas por una
+               aclaración. Se dice en la ayuda. -->
+          <label for="subir-puesto2">Perfil de puesto <span class="ayuda">(opcional, muy recomendado)</span></label>
+          <div class="bajo-campo">
+            <button type="button" id="subir-puesto2" class="secundario chico">Subir perfil de puesto…</button>
+            <span class="ayuda">.pdf, .docx o .doc — sin él no hay índice de adecuación</span>
+          </div>
+          <div id="puesto-elegido2" class="ayuda elegida"></div>
+          <input type="file" id="archivo-puesto2" class="oculto" accept=".pdf,.docx,.doc">
+        </div>
+      </div>
+      <div class="acciones">
+        <button id="generar2" disabled>Generar Informe 2</button>
+        <div id="cargando2" class="cargando oculto">
+          <div id="spinner2" class="spinner"></div>
+          <div class="proceso">
+            <div id="etapas2" class="etapas"></div>
+            <span id="etapa-nombre2" class="etapa-nombre">Empezando…</span>
+            <span id="etapa-contador2" class="etapa-contador"></span>
+            <span id="etapa-tiempo2" class="etapa-tiempo"></span>
+          </div>
+        </div>
+      </div>
+      <div id="resultado2"></div>
+    </section>
+    </div>
+
+    <!-- El historial es uno solo para los dos modelos, así que vive afuera de los
+         dos paneles y se ve desde cualquiera de las dos solapas. La columna
+         "Modelo" es la que dice cuál generó cada archivo. -->
+    <div id="vista-historial">
     <section>
       <h2>Últimos informes</h2>
       <table>
         <thead>
           <tr>
-            <th>Fecha</th><th>Evaluado</th><th>Informe</th>
-            <th>Generado por</th><th>Calificación</th>
+            <th>Código</th><th>Fecha</th><th>Evaluado</th><th>Modelo</th><th>Informe</th>
+            <th>Perfil de puesto</th><th>Generado por</th><th>Calificación</th>
           </tr>
         </thead>
         <tbody id="historial">
-          <tr><td colspan="5" class="vacio">Cargando…</td></tr>
+          <tr><td colspan="8" class="vacio">Cargando…</td></tr>
         </tbody>
       </table>
     </section>
@@ -194,12 +420,54 @@
       </section>
 
       <section>
-        <h2>Actividad y calidad</h2>
-        <div class="graficos">
-          <div class="grafico">
-            <h3>Informes por día</h3>
-            <div id="grafico-fechas"></div>
+        <div class="titulo-con-accion">
+          <h2>Actividad</h2>
+          <div class="segmentado" role="group" aria-label="Período">
+            <button id="periodo-dia" aria-pressed="false">Día</button>
+            <button id="periodo-semana" aria-pressed="true">Semana</button>
+            <button id="periodo-mes" aria-pressed="false">Mes</button>
           </div>
+        </div>
+        <div class="kpis">
+          <div class="kpi">
+            <div class="valor" id="kpi-periodo-actual">—</div>
+            <div class="rotulo" id="kpi-periodo-rotulo">informes esta semana</div>
+          </div>
+          <div class="kpi">
+            <div class="valor variacion" id="kpi-periodo-variacion">—</div>
+            <div class="rotulo" id="kpi-variacion-rotulo">contra la semana anterior</div>
+          </div>
+          <div class="kpi">
+            <div class="valor" id="kpi-periodo-usuarios">—</div>
+            <div class="rotulo">personas generando</div>
+          </div>
+          <div class="kpi">
+            <div class="valor" id="kpi-periodo-evaluados">—</div>
+            <div class="rotulo">personas evaluadas</div>
+          </div>
+        </div>
+        <div class="grafico" style="margin-top:1.25rem">
+          <h3 id="titulo-grafico-periodo">Informes por semana</h3>
+          <div id="grafico-periodo"></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Uso por persona</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Genera</th><th>Informes</th><th>Calificados</th>
+              <th>Calificación</th><th>Segundos</th><th>Último</th>
+            </tr>
+          </thead>
+          <tbody id="por-usuario"><tr><td colspan="6" class="vacio">Cargando…</td></tr></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Calidad</h2>
+        <div class="graficos">
           <div class="grafico">
             <h3>Distribución de calificaciones</h3>
             <div id="grafico-distribucion"></div>
@@ -247,45 +515,20 @@
     const $ = (id) => document.getElementById(id);
     let filaACalificar = null;
 
-    function mostrarAviso(clase, nodos) {
-      const aviso = document.createElement('div');
-      aviso.className = 'aviso ' + clase;
-      nodos.forEach((n) => aviso.appendChild(typeof n === 'string' ? document.createTextNode(n) : n));
-      $('resultado').replaceChildren(aviso);
-    }
-
-    function cargarPlanillas() {
-      google.script.run
-        .withSuccessHandler((planillas) => {
-          const select = $('planilla');
-          select.replaceChildren();
-          if (!planillas.length) {
-            select.appendChild(new Option('No hay planillas en la carpeta', ''));
-            return;
-          }
-          select.appendChild(new Option('Elegí una planilla…', ''));
-          planillas.forEach((p) => select.appendChild(new Option(p.nombre, p.id)));
-          $('generar').disabled = false;
-        })
-        .withFailureHandler((e) => {
-          $('planilla').replaceChildren(new Option('No se pudieron listar las planillas', ''));
-          mostrarAviso('error', [e.message]);
-        })
-        .listarPlanillas();
-    }
+    // ── El historial, uno solo para los dos modelos ───────────────
 
     function cargarHistorial() {
       google.script.run
         .withSuccessHandler((corridas) => {
           const cuerpo = $('historial');
           if (!corridas.length) {
-            cuerpo.replaceChildren(fila(['Todavía no se generó ningún informe'], 'vacio', 5));
+            cuerpo.replaceChildren(fila(['Todavía no se generó ningún informe'], 'vacio', 8));
             return;
           }
           cuerpo.replaceChildren(...corridas.map(filaDeCorrida));
         })
         .withFailureHandler((e) => {
-          $('historial').replaceChildren(fila([e.message], 'vacio', 5));
+          $('historial').replaceChildren(fila([e.message], 'vacio', 8));
         })
         .listarHistorial(25);
     }
@@ -300,13 +543,32 @@
       return tr;
     }
 
+    /**
+     * El nombre del perfil de puesto, sin lo que ya dice el resto de la fila.
+     *
+     * En el historial se guarda el nombre del archivo tal como quedó en Drive
+     * —"A12-PERFIL Scrum Master Tecnología….pdf"—. El código ya está en la primera
+     * columna y la extensión no aporta nada, así que los dos se sacan: lo que
+     * queda es el puesto, que es el dato por el que se mira esta columna.
+     */
+    function nombreDePerfil(archivo) {
+      return String(archivo)
+        .replace(/^[A-Z]+\d+-PERFIL /, '')
+        .replace(/\.(pdf|docx|doc)$/i, '');
+    }
+
     function filaDeCorrida(corrida) {
       const tr = document.createElement('tr');
-      [corrida.fecha, corrida.evaluado].forEach((texto) => {
-        const td = document.createElement('td');
-        td.textContent = texto;
-        tr.appendChild(td);
-      });
+      // El código va primero: es como se nombran los archivos en Drive, así que es
+      // por donde se busca una evaluación cuando se llega desde la carpeta. El
+      // modelo va junto al nombre porque con dos informes conviviendo es parte de
+      // qué es esa fila, no un detalle del final.
+      [corrida.codigo || '—', corrida.fecha, corrida.evaluado, corrida.modelo || '—']
+        .forEach((texto) => {
+          const td = document.createElement('td');
+          td.textContent = texto;
+          tr.appendChild(td);
+        });
 
       const tdLink = document.createElement('td');
       if (corrida.informeUrl) {
@@ -319,8 +581,29 @@
       }
       tr.appendChild(tdLink);
 
+      // Con qué perfil de puesto se contrastó, o un guión si no se subió ninguno.
+      // El punto 6 es opcional, así que la mayoría de las filas viejas no tienen
+      // nada acá: el guión las distingue de una celda vacía por error.
+      const tdPerfil = document.createElement('td');
+      if (corrida.perfilPuesto) {
+        tdPerfil.className = 'perfil';
+        tdPerfil.textContent = nombreDePerfil(corrida.perfilPuesto);
+        tdPerfil.title = corrida.perfilPuesto;
+      } else {
+        tdPerfil.className = 'sin-perfil';
+        tdPerfil.textContent = '—';
+      }
+      tr.appendChild(tdPerfil);
+
       const tdUsuario = document.createElement('td');
       tdUsuario.textContent = corrida.usuario;
+      // La gerencia y el sector sólo los trae el Informe 2. No tienen columna
+      // propia —serían dos columnas vacías en la mitad de las filas— pero están
+      // acá para no tener que abrir el informe si lo único que se busca es de qué
+      // área era la evaluación.
+      if (corrida.gerencia || corrida.sector) {
+        tdUsuario.title = [corrida.gerencia, corrida.sector].filter(Boolean).join(' — ');
+      }
       tr.appendChild(tdUsuario);
 
       const tdCalificacion = document.createElement('td');
@@ -349,35 +632,390 @@
       $('dialogo').showModal();
     }
 
-    $('generar').addEventListener('click', () => {
-      const planillaId = $('planilla').value;
-      const nombre = $('evaluado').value.trim();
-      if (!planillaId) return mostrarAviso('error', ['Elegí una planilla de respuestas.']);
-      if (!nombre) return mostrarAviso('error', ['Escribí el nombre de la persona evaluada.']);
+    // ── El panel de generación ────────────────────────────────────
+    /**
+     * Los dos modelos de informe se generan desde el mismo formulario: subir la
+     * planilla, escribir el nombre, subir el perfil de puesto, mirar la línea de
+     * etapas. Lo que cambia es qué campos extra pide, a qué función del servidor
+     * le habla y cuáles son sus etapas.
+     *
+     * Por eso el panel se arma una vez y se instancia dos, en vez de tener el
+     * mismo código copiado con los ids cambiados. Con dos copias, cada arreglo de
+     * la subida de archivos —que ya tuvo varios— habría que hacerlo dos veces, y
+     * la segunda es la que alguien se olvida.
+     *
+     * Los ids del marcado son el nombre base más el sufijo del panel: el primero
+     * usa '' y conserva los ids de siempre ('generar', 'archivo'…), el segundo
+     * usa '2'.
+     *
+     * @param {Object} config {sufijo, etapas, metodo, camposExtra}
+     *   `camposExtra` devuelve {valores} para sumar al pedido, o {error} con el
+     *   texto a mostrar si falta completar algo.
+     */
+    function crearPanel(config) {
+      const $$ = (base) => $(base + config.sufijo);
 
-      $('generar').disabled = true;
-      $('cargando').classList.remove('oculto');
-      $('resultado').replaceChildren();
+      function mostrarAviso(clase, nodos) {
+        const aviso = document.createElement('div');
+        aviso.className = 'aviso ' + clase;
+        nodos.forEach((n) => aviso.appendChild(typeof n === 'string' ? document.createTextNode(n) : n));
+        $$('resultado').replaceChildren(aviso);
+      }
 
-      google.script.run
-        .withSuccessHandler((r) => {
-          $('generar').disabled = false;
-          $('cargando').classList.add('oculto');
-          const link = document.createElement('a');
-          link.href = r.informeUrl;
-          link.target = '_blank';
-          link.rel = 'noopener';
-          link.textContent = r.nombreArchivo;
-          mostrarAviso('ok', ['Informe listo en ' + r.segundos + ' s: ', link]);
-          $('evaluado').value = '';
-          cargarHistorial();
-        })
-        .withFailureHandler((e) => {
-          $('generar').disabled = false;
-          $('cargando').classList.add('oculto');
-          mostrarAviso('error', [e.message]);
-        })
-        .generarDesdeInterfaz({ planillaId: planillaId, nombreEvaluado: nombre });
+      // ── Subida de planillas ───────────────────────────────────────
+      // El archivo viaja en base64 dentro de google.script.run: la app corre en un
+      // iframe de Apps Script y no hay un endpoint al que hacerle un POST.
+
+      /** La planilla cargada, {id, nombre}, o null si todavía no se subió ninguna. */
+      let planillaElegida = null;
+
+      function subiendo(activo) {
+        $$('subir').disabled = activo;
+        $$('subir').textContent = activo ? 'Subiendo…' : 'Subir planilla…';
+        // Generar queda bloqueado mientras sube —la planilla está por cambiar— y
+        // también antes de la primera subida: sin desplegable, la subida es la
+        // única forma de que haya una planilla con la que generar.
+        $$('generar').disabled = activo || !planillaElegida;
+      }
+
+      function mostrarPlanillaElegida() {
+        $$('planilla-elegida').textContent = planillaElegida
+          ? 'Cargada: ' + planillaElegida.nombre
+          : '';
+      }
+
+      function subirArchivo(archivo) {
+        const lector = new FileReader();
+        lector.onerror = () => {
+          subiendo(false);
+          mostrarAviso('error', ['No se pudo leer el archivo de la máquina.']);
+        };
+        lector.onload = () => {
+          // readAsDataURL da "data:<mime>;base64,<datos>": al servidor va sólo la
+          // segunda parte.
+          const datosBase64 = String(lector.result).split(',')[1] || '';
+          google.script.run
+            .withSuccessHandler((planilla) => {
+              planillaElegida = planilla;
+              mostrarPlanillaElegida();
+              subiendo(false);
+              mostrarAviso('ok', ['Planilla subida: ' + planilla.nombre + '. Ya está elegida.']);
+              $$('evaluado').focus();
+            })
+            .withFailureHandler((e) => {
+              subiendo(false);
+              mostrarAviso('error', [e.message]);
+            })
+            .subirPlanilla({ nombre: archivo.name, datosBase64: datosBase64 });
+        };
+        lector.readAsDataURL(archivo);
+      }
+
+      $$('subir').addEventListener('click', () => $$('archivo').click());
+
+      $$('archivo').addEventListener('change', (evento) => {
+        const archivo = evento.target.files[0];
+        // Se limpia enseguida para que elegir dos veces el mismo archivo —después de
+        // corregirlo, por ejemplo— vuelva a disparar el evento change.
+        evento.target.value = '';
+        if (!archivo) return;
+        subiendo(true);
+        $$('resultado').replaceChildren();
+        subirArchivo(archivo);
+      });
+
+      // ── Subida del perfil de puesto ───────────────────────────────
+      // Subirlo NO es sólo copiar un archivo: el servidor lo lee y devuelve qué
+      // dimensiones entendió que el puesto exige. Por eso tarda —son segundos, no
+      // instantáneo— y por eso se muestra el resultado: es el momento en que
+      // todavía se puede corregir el documento y volver a subirlo.
+
+      /** El perfil de puesto leído, o null si no se subió ninguno. */
+      let puestoElegido = null;
+
+      function subiendoPuesto(activo) {
+        $$('subir-puesto').disabled = activo;
+        $$('subir-puesto').textContent = activo ? 'Leyendo el perfil…' : 'Subir perfil de puesto…';
+        // Generar se bloquea mientras se lee el perfil: si no, se puede arrancar un
+        // informe que iba a llevar el contraste con el puesto y sale sin él.
+        $$('generar').disabled = activo || !planillaElegida;
+      }
+
+      function mostrarPuestoElegido() {
+        if (!puestoElegido) {
+          $$('puesto-elegido').replaceChildren();
+          return;
+        }
+        const partes = [];
+        const titulo = document.createElement('div');
+        titulo.textContent = 'Cargado: ' + (puestoElegido.puesto || puestoElegido.nombre);
+        partes.push(titulo);
+
+        const detalle = document.createElement('div');
+        detalle.textContent = puestoElegido.exigencias.length + ' exigencia(s) reconocidas: '
+          + puestoElegido.exigencias.map((e) => e.dimension + ' (' + e.nivelRequerido + ')').join(', ');
+        partes.push(detalle);
+
+        // Lo descartado se muestra: es lo que va a salir como alerta en el informe,
+        // y verlo acá permite corregir el perfil de puesto antes de generarlo.
+        if (puestoElegido.descartadas && puestoElegido.descartadas.length) {
+          const descartes = document.createElement('div');
+          descartes.textContent = 'Sin usar, porque el documento no las sostiene: '
+            + puestoElegido.descartadas.map((d) => d.dimension).join(', ') + '.';
+          partes.push(descartes);
+        }
+        $$('puesto-elegido').replaceChildren(...partes);
+      }
+
+      function subirPerfil(archivo) {
+        const lector = new FileReader();
+        lector.onerror = () => {
+          subiendoPuesto(false);
+          mostrarAviso('error', ['No se pudo leer el archivo de la máquina.']);
+        };
+        lector.onload = () => {
+          const datosBase64 = String(lector.result).split(',')[1] || '';
+          google.script.run
+            .withSuccessHandler((puesto) => {
+              puestoElegido = puesto;
+              mostrarPuestoElegido();
+              subiendoPuesto(false);
+              mostrarAviso('ok', ['Perfil de puesto leído: '
+                + (puesto.puesto || puesto.nombre) + '. ' + config.avisoDePuesto]);
+            })
+            .withFailureHandler((e) => {
+              puestoElegido = null;
+              mostrarPuestoElegido();
+              subiendoPuesto(false);
+              mostrarAviso('error', [e.message]);
+            })
+            .subirPerfilDePuesto({ nombre: archivo.name, datosBase64: datosBase64 });
+        };
+        lector.readAsDataURL(archivo);
+      }
+
+      $$('subir-puesto').addEventListener('click', () => $$('archivo-puesto').click());
+
+      $$('archivo-puesto').addEventListener('change', (evento) => {
+        const archivo = evento.target.files[0];
+        evento.target.value = '';
+        if (!archivo) return;
+        subiendoPuesto(true);
+        $$('resultado').replaceChildren();
+        subirPerfil(archivo);
+      });
+
+      // ── Progreso de la generación ─────────────────────────────────
+      // Las etapas vienen del servidor (Progreso.gs) para no duplicar la lista, y
+      // son distintas para cada modelo de informe: el flujo del Informe 2 no arma
+      // el gráfico y contrasta con el puesto antes de redactar.
+      const SONDEO_MS = 2000;
+      let sondeo = null;
+      let sondeoEnVuelo = false;
+
+      // Los puntos son las etapas del servidor más uno final, "Finalizado", que no
+      // es trabajo sino el estado terminal: por eso lo agrega la interfaz y no
+      // Progreso.gs. Queda en pantalla al terminar, junto con el tiempo total.
+      const ETAPA_FINAL = config.etapas.length;
+
+      /** Dibuja los puntos unidos por tramos, como una línea de tiempo. */
+      function dibujarEtapas() {
+        const partes = [];
+        for (let i = 0; i <= ETAPA_FINAL; i++) {
+          if (i > 0) {
+            const union = document.createElement('div');
+            union.className = 'union';
+            partes.push(union);
+          }
+          const punto = document.createElement('div');
+          punto.className = 'etapa';
+          partes.push(punto);
+        }
+        $$('etapas').replaceChildren(...partes);
+      }
+
+      /** Los puntos y los tramos, por separado: el DOM los tiene intercalados. */
+      function piezasDeLaLinea() {
+        const hijos = [...$$('etapas').children];
+        return {
+          puntos: hijos.filter((h) => h.classList.contains('etapa')),
+          uniones: hijos.filter((h) => h.classList.contains('union')),
+        };
+      }
+
+      /** Marca la etapa en curso. `indice` -1 deja todo apagado. */
+      function pintarEtapa(indice, nombre) {
+        const { puntos, uniones } = piezasDeLaLinea();
+        const terminado = indice >= ETAPA_FINAL;
+        puntos.forEach((punto, i) => {
+          punto.className = 'etapa'
+            + (i < indice ? ' hecha' : '')
+            + (i === indice ? (terminado ? ' final' : ' actual') : '');
+        });
+        // El tramo se pinta cuando la etapa de su izquierda ya pasó.
+        uniones.forEach((union, i) => {
+          union.className = 'union' + (i < indice ? ' hecha' : '');
+        });
+
+        $$('etapa-nombre').textContent = nombre || 'Empezando…';
+        $$('etapa-contador').textContent = (indice >= 0 && !terminado)
+          ? '(' + (indice + 1) + ' de ' + config.etapas.length + ')'
+          : '';
+      }
+
+      /** Deja la línea completa en pantalla, con el tiempo total a la derecha. */
+      function marcarFinalizado(segundos) {
+        pintarEtapa(ETAPA_FINAL, 'Finalizado');
+        $$('spinner').classList.add('oculto');
+        $$('etapa-tiempo').textContent = tiempoLegible(segundos);
+      }
+
+      function empezarSondeo(token) {
+        dibujarEtapas();
+        pintarEtapa(-1, null);
+        sondeo = setInterval(() => {
+          // Sin encimar pedidos: si el anterior no volvió, se espera. Una llamada
+          // por etapa alcanza, y apilarlas sólo agrega latencia.
+          if (sondeoEnVuelo) return;
+          sondeoEnVuelo = true;
+          google.script.run
+            .withSuccessHandler((p) => {
+              sondeoEnVuelo = false;
+              if (p) pintarEtapa(p.etapa, p.nombre);
+            })
+            .withFailureHandler(() => { sondeoEnVuelo = false; })
+            .progresoDeInforme(token);
+        }, SONDEO_MS);
+      }
+
+      function pararSondeo() {
+        if (sondeo) clearInterval(sondeo);
+        sondeo = null;
+        sondeoEnVuelo = false;
+      }
+
+      $$('generar').addEventListener('click', () => {
+        const planillaId = planillaElegida ? planillaElegida.id : '';
+        const nombre = $$('evaluado').value.trim();
+        if (!planillaId) return mostrarAviso('error', ['Subí la planilla de respuestas.']);
+        if (!nombre) return mostrarAviso('error', ['Escribí el nombre de la persona evaluada.']);
+        // Lo que este modelo pide además del nombre. El Informe 2 pide la gerencia
+        // y el sector; el Informe 1 no pide nada más.
+        const extra = config.camposExtra ? config.camposExtra($$) : { valores: {} };
+        if (extra.error) return mostrarAviso('error', [extra.error]);
+
+        $$('generar').disabled = true;
+        $$('cargando').classList.remove('oculto');
+        // La línea de la corrida anterior queda en pantalla: hay que reiniciarla.
+        $$('spinner').classList.remove('oculto');
+        $$('etapa-tiempo').textContent = '';
+        $$('resultado').replaceChildren();
+
+        // Identifica a esta corrida para poder pedirle el avance. No lleva datos
+        // de nadie: es una clave del Cache y nada más.
+        const token = 'c' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+        empezarSondeo(token);
+
+        const pedido = Object.assign({
+          planillaId: planillaId,
+          nombreEvaluado: nombre,
+          token: token,
+          // Viaja la lectura entera, no el id del archivo: leerla de nuevo sería
+          // otra llamada al modelo adentro de la corrida, que es justo lo que no
+          // entra en los seis minutos. El servidor la vuelve a sanear igual.
+          puesto: puestoElegido,
+        }, extra.valores);
+
+        google.script.run
+          .withSuccessHandler((r) => {
+            pararSondeo();
+            $$('generar').disabled = false;
+            // La línea NO se esconde: queda completa, con "Finalizado" y el tiempo
+            // total, como registro de lo que acaba de pasar.
+            marcarFinalizado(r.segundos);
+            const link = document.createElement('a');
+            link.href = r.informeUrl;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = r.nombreArchivo;
+            mostrarAviso('ok', ['Informe listo: ', link]);
+            // Si el texto salió con la redacción determinista, decirlo y decir por
+            // qué: un informe pobre en silencio obliga a adivinar la causa.
+            if (r.sintesisAsistida === false) {
+              const nota = document.createElement('div');
+              nota.className = 'aviso error';
+              nota.textContent = 'Ojo: ' + config.avisoDeterminista + ' — '
+                + (r.sintesisMotivo || 'motivo no informado') + '.';
+              $$('resultado').appendChild(nota);
+            }
+            // El contraste con el puesto puede salir con la prosa fija por las
+            // mismas razones (sin tiempo, sin clave, respuesta inválida). Los
+            // números y las tablas no dependen de eso, pero conviene saberlo antes
+            // de mandarlo.
+            if (r.conPuesto) {
+              const nota = document.createElement('div');
+              nota.className = 'aviso ok';
+              nota.textContent = 'Contraste con el perfil de puesto incluido — índice de adecuación: '
+                + (r.adecuacion === null ? 'no calculable' : r.adecuacion + ' %') + '.';
+              $$('resultado').appendChild(nota);
+            }
+            $$('evaluado').value = '';
+            if (config.limpiarExtra) config.limpiarExtra($$);
+            // El perfil de puesto se limpia: es de esta evaluación, y dejarlo cargado
+            // haría que el próximo informe salga contra un puesto que nadie eligió.
+            puestoElegido = null;
+            mostrarPuestoElegido();
+            cargarHistorial();
+          })
+          .withFailureHandler((e) => {
+            pararSondeo();
+            $$('generar').disabled = false;
+            $$('cargando').classList.add('oculto');
+            mostrarAviso('error', [e.message]);
+          })[config.metodo](pedido);
+      });
+    }
+
+    /** 72.4 → "1 m 12 s"; 18.3 → "18,3 s". Sin decimales cuando no aportan. */
+    function tiempoLegible(segundos) {
+      const total = Number(segundos);
+      if (!isFinite(total)) return '';
+      if (total < 60) return String(total).replace('.', ',') + ' s';
+      const minutos = Math.floor(total / 60);
+      return minutos + ' m ' + Math.round(total - minutos * 60) + ' s';
+    }
+
+    // El Informe 1: el de siempre, con los ids de siempre.
+    crearPanel({
+      sufijo: '',
+      etapas: <?!= etapasJson ?>,
+      metodo: 'generarDesdeInterfaz',
+      avisoDePuesto: 'El informe va a incluir el punto 6.',
+      avisoDeterminista: 'el punto 5 salió con el texto básico porque no se pudo redactar la síntesis',
+    });
+
+    // El Informe 2: el otro modelo. Pide la gerencia y el sector, que van
+    // impresos en el encabezado del documento.
+    crearPanel({
+      sufijo: '2',
+      etapas: <?!= etapas2Json ?>,
+      metodo: 'generarInforme2DesdeInterfaz',
+      avisoDePuesto: 'El informe va a incluir el índice de adecuación y la matriz de ajuste.',
+      avisoDeterminista: 'el informe salió con el texto básico porque no se pudo redactar el análisis',
+      camposExtra: ($$) => {
+        const gerencia = $$('gerencia').value.trim();
+        const sector = $$('sector').value.trim();
+        // Se validan acá y no sólo en el servidor porque son campos que se
+        // escriben a mano: avisar antes de arrancar ahorra los tres minutos de
+        // una corrida que el servidor va a rechazar igual.
+        if (!gerencia) return { error: 'Escribí la gerencia.' };
+        if (!sector) return { error: 'Escribí el sector.' };
+        return { valores: { gerencia: gerencia, sector: sector } };
+      },
+      limpiarExtra: ($$) => {
+        $$('gerencia').value = '';
+        $$('sector').value = '';
+      },
     });
 
     $('cancelar').addEventListener('click', () => $('dialogo').close());
@@ -493,7 +1131,87 @@
       return partes.length === 3 ? `${partes[2]}/${partes[1]}` : String(fecha);
     }
 
+    // ── Período del tablero ───────────────────────────────────────
+    // La semana es lo que se muestra al entrar: el día es ruidoso —hay días sin
+    // ninguna corrida— y el mes tarda demasiado en decir algo.
+    let granularidad = 'semana';
+    // Las tres granularidades vienen calculadas en la misma respuesta, así que
+    // cambiar de período no vuelve a pedirle nada al servidor.
+    let metricas = null;
+
+    const NOMBRE_PERIODO = {
+      dia: { titulo: 'Informes por día', actual: 'informes hoy', anterior: 'contra ayer' },
+      semana: { titulo: 'Informes por semana', actual: 'informes esta semana', anterior: 'contra la semana anterior' },
+      mes: { titulo: 'Informes por mes', actual: 'informes este mes', anterior: 'contra el mes anterior' },
+    };
+
+    function dibujarPeriodo() {
+      if (!metricas) return;
+      const nombres = NOMBRE_PERIODO[granularidad];
+      const resumen = metricas.resumenPorPeriodo[granularidad];
+
+      $('titulo-grafico-periodo').textContent = nombres.titulo;
+      $('kpi-periodo-rotulo').textContent = nombres.actual;
+      $('kpi-variacion-rotulo').textContent = nombres.anterior;
+
+      $('kpi-periodo-actual').textContent = resumen.actual;
+      $('kpi-periodo-usuarios').textContent = resumen.usuariosActivos;
+      $('kpi-periodo-evaluados').textContent = resumen.evaluados;
+
+      const variacion = $('kpi-periodo-variacion');
+      variacion.className = 'valor variacion';
+      if (resumen.variacion === null) {
+        // Sin período anterior no hay contra qué comparar. Un 0 % o un 100 %
+        // inventado se leería como un dato.
+        variacion.textContent = '—';
+      } else {
+        variacion.textContent = (resumen.variacion > 0 ? '+' : '') + resumen.variacion + '%';
+        if (resumen.variacion > 0) variacion.classList.add('sube');
+        if (resumen.variacion < 0) variacion.classList.add('baja');
+      }
+
+      graficoDeBarras($('grafico-periodo'),
+        metricas.porPeriodo[granularidad].map((p) => ({ rotulo: p.etiqueta, valor: p.cantidad })));
+    }
+
+    function elegirPeriodo(cual) {
+      granularidad = cual;
+      ['dia', 'semana', 'mes'].forEach((g) => {
+        $('periodo-' + g).setAttribute('aria-pressed', String(g === cual));
+      });
+      dibujarPeriodo();
+    }
+
+    ['dia', 'semana', 'mes'].forEach((g) => {
+      $('periodo-' + g).addEventListener('click', () => elegirPeriodo(g));
+    });
+
+    function dibujarPorUsuario(porUsuario) {
+      const cuerpo = $('por-usuario');
+      if (!porUsuario.length) {
+        cuerpo.replaceChildren(fila(['Todavía no se generó ningún informe'], 'vacio', 6));
+        return;
+      }
+      cuerpo.replaceChildren(...porUsuario.map((u) => {
+        const tr = document.createElement('tr');
+        [
+          u.usuario,
+          u.informes,
+          u.calificados + ' (' + u.porcentajeCalificado + '%)',
+          u.promedioCalificacion === null ? '—' : u.promedioCalificacion,
+          u.promedioSegundos === null ? '—' : u.promedioSegundos,
+          diaYMes(u.ultima),
+        ].forEach((valor) => {
+          const td = document.createElement('td');
+          td.textContent = valor;
+          tr.appendChild(td);
+        });
+        return tr;
+      }));
+    }
+
     function dibujarMetricas(m) {
+      metricas = m;
       $('kpi-total').textContent = m.total;
       $('kpi-calificacion').textContent = m.promedioCalificacion || '—';
       $('kpi-tiempo').textContent = m.promedioSegundos || '—';
@@ -510,8 +1228,9 @@
         alerta.replaceChildren();
       }
 
-      graficoDeBarras($('grafico-fechas'),
-        m.porFecha.map((f) => ({ rotulo: diaYMes(f.fecha), valor: f.cantidad })));
+      dibujarPeriodo();
+      dibujarPorUsuario(m.porUsuario);
+
       graficoDeBarras($('grafico-distribucion'),
         m.distribucion.map((d) => ({ rotulo: d.puntaje + '★', valor: d.cantidad })));
       graficoDeLinea($('grafico-tendencia'),
@@ -538,23 +1257,32 @@
     function cargarMetricas() {
       google.script.run
         .withSuccessHandler(dibujarMetricas)
-        .withFailureHandler((e) => sinDatos($('grafico-fechas'), e.message))
+        .withFailureHandler((e) => sinDatos($('grafico-periodo'), e.message))
         .obtenerMetricas();
     }
 
+    /**
+     * Qué solapa se ve.
+     *
+     * El historial no es de ninguna de las dos solapas de generación: es la lista
+     * de lo que se generó con las dos, así que se muestra con cualquiera de ellas
+     * y se esconde sólo en Métricas, que tiene su propia lectura de lo mismo.
+     */
+    const VISTAS = ['informes', 'informes2', 'metricas'];
+
     function mostrarVista(cual) {
-      const esMetricas = cual === 'metricas';
-      $('vista-informes').classList.toggle('oculto', esMetricas);
-      $('vista-metricas').classList.toggle('oculto', !esMetricas);
-      $('tab-informes').setAttribute('aria-selected', String(!esMetricas));
-      $('tab-metricas').setAttribute('aria-selected', String(esMetricas));
-      if (esMetricas) cargarMetricas();
+      VISTAS.forEach((vista) => {
+        $('vista-' + vista).classList.toggle('oculto', vista !== cual);
+        $('tab-' + vista).setAttribute('aria-selected', String(vista === cual));
+      });
+      $('vista-historial').classList.toggle('oculto', cual === 'metricas');
+      if (cual === 'metricas') cargarMetricas();
     }
 
     $('tab-informes').addEventListener('click', () => mostrarVista('informes'));
+    $('tab-informes2').addEventListener('click', () => mostrarVista('informes2'));
     $('tab-metricas').addEventListener('click', () => mostrarVista('metricas'));
 
-    cargarPlanillas();
     cargarHistorial();
   </script>
 </body>

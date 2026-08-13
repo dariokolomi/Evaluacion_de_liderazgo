@@ -13,10 +13,18 @@
 'use strict';
 
 class Texto {
-  constructor(texto) {
+  /** `heredado` es el formato del tramo anterior del párrafo. Ver appendText. */
+  constructor(texto, heredado) {
+    const h = heredado || {};
     this.texto = texto;
-    this.negrita = null;
-    this.cursiva = null;
+    // Se hereda la negrita y la cursiva, que son las que se ven. El tamaño y el
+    // color también se heredan en Docs, pero no se modelan: el único lugar donde
+    // pasa es un rótulo de 11 pt seguido de texto normal, y 11 pt es el default
+    // del documento, así que en la página no hay diferencia y modelarlo sólo haría
+    // que la comparación contra Python marque algo que no existe. Si algún día un
+    // rótulo de otro tamaño arrastra al texto que le sigue, se extiende acá.
+    this.negrita = h.negrita !== undefined ? h.negrita : null;
+    this.cursiva = h.cursiva !== undefined ? h.cursiva : null;
     this.tamano = null;
     this.color = null;
   }
@@ -33,8 +41,17 @@ class Parrafo {
     this.sangria = null;
     this.tramos = [];
   }
+  /**
+   * En Docs, un tramo nuevo NACE con el formato del anterior del mismo párrafo:
+   * appendText no arranca limpio. Se modela acá porque el stub que no lo modelaba
+   * dejó pasar un bug que se veía en todos los informes —después de un tramo en
+   * negrita, el resto del párrafo salía en negrita— y la comparación contra Python
+   * no lo detectaba. Un stub más permisivo que la API real vuelve verde un test que
+   * debería estar rojo.
+   */
   appendText(texto) {
-    const t = new Texto(texto);
+    const anterior = this.tramos[this.tramos.length - 1];
+    const t = new Texto(texto, anterior);
     this.tramos.push(t);
     return t;
   }
@@ -61,6 +78,17 @@ class Celda {
       setBold(v) { celda.negrita = v; return this; },
       setFontSize(v) { celda.tamano = v; return this; },
       setForegroundColor(v) { celda.color = v; return this; },
+    };
+  }
+  /** La celda es un solo párrafo; alcanza para que centrarCelda() funcione. */
+  getNumChildren() { return 1; }
+  getChild() {
+    const celda = this;
+    return {
+      getType: () => 'PARAGRAPH',
+      asParagraph: () => ({
+        setAlignment(alineacion) { celda.centrado = alineacion === 'CENTER'; return this; },
+      }),
     };
   }
 }
@@ -100,6 +128,10 @@ class Body {
     this.bloques = [new Parrafo()];
     return this;
   }
+  // Como un Doc nuevo: Carta (612 pt) con márgenes de 72 pt → 468 pt útiles.
+  getPageWidth() { return 612; }
+  getMarginLeft() { return 72; }
+  getMarginRight() { return 72; }
   getNumChildren() { return this.bloques.length; }
   getChild(indice) {
     const bloque = this.bloques[indice];

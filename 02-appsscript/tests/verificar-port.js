@@ -46,11 +46,17 @@ function comparar(ruta, esperado, obtenido, diferencias) {
   }
 }
 
-/** El nivel por percentil lo aplica Python recién al armar el documento. */
+/**
+ * El nivel por percentil lo aplica Python recién al armar el documento.
+ *
+ * El corte bajo/medio ya no es el de Python: el PO lo movió a "bajo <= P25" el
+ * 2026-07-27, así que un P25 que Python rotulaba Medio acá tiene que dar Bajo.
+ * Es divergencia buscada, no deriva del port.
+ */
 function nivelPorPercentilEsperado(percentiles) {
   const niveles = {};
   for (const [clave, p] of Object.entries(percentiles)) {
-    niveles[clave] = p >= 75 ? 'Alto' : p >= 25 ? 'Medio' : 'Bajo';
+    niveles[clave] = p > 75 ? 'Alto' : p > 25 ? 'Medio' : 'Bajo';
   }
   return niveles;
 }

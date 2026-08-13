@@ -8,6 +8,17 @@
  * La verificación se hace en la operación, no sólo en doGet. Un doGet que
  * chequea y una función que no, es una función que queda expuesta el día que
  * alguien la invoque desde otro lado.
+ *
+ * POR QUÉ ESTO NO ES OPCIONAL: el manifiesto declara `executeAs:
+ * "USER_DEPLOYING"`, así que la app entra a Drive y al Sheet con las
+ * credenciales de quien la desplegó, no con las de quien la usa. Los permisos de
+ * Drive dejan de filtrar: el grupo es la única barrera. Una función que se olvide
+ * de llamar a `exigirAcceso` le da a cualquiera del dominio el acceso del
+ * dueño del despliegue.
+ *
+ * Si algún día se vuelve a `USER_ACCESSING`, cada usuario entra con lo suyo y
+ * Drive vuelve a ser una segunda barrera — pero hay que darle permiso sobre las
+ * carpetas y el Sheet a cada uno, o la app falla al guardar.
  */
 
 /** @return {string} correo del usuario que está ejecutando. */
