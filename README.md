@@ -112,7 +112,8 @@ se sustituye después, del lado del servidor.
 
 compartido/           Datos que alimentan a ambos proyectos
 ├── instrumentos/     Claves, baremos y planillas de respuestas
-├── modelos/          Plantillas .docx del informe y el perfil de puesto de ejemplo
+├── modelos/          Los .docx de los dos modelos de informe y un perfil de puesto
+│                     de ejemplo. Son referencia: el código no los lee (ver LEEME.md)
 └── referencias/      Material teórico e interpretativo
 ```
 
